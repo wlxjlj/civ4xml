@@ -304,7 +304,7 @@ class Civ4XmlMessageBox(QtGui.QMessageBox):
         
         textList = QtCore.QStringList()
         
-        #text = '<a href="http://www.pku.edu.cn">http://www.google.com</a>'
+        textList.append(self.tr(u'Home Page :  %1').arg(u'<a href="http://code.google.com/p/civ4xml/">http://code.google.com/p/civ4xml/</a><br>'))
         textList.append(self.tr(u'Civ4 XML View version %1<br>').arg(GC.VERSION_civ4xml))
         textList.append(self.tr(u'Python version %1').arg(sys.version.split(u' ')[0]))
         textList.append(self.tr(u'PyQt version %1').arg(QtCore.PYQT_VERSION_STR))
