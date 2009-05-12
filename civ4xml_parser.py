@@ -1,0 +1,1097 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# civ4xml_parser.py
+
+from PyQt4 import QtCore, QtGui, QtXml
+
+from civ4xml_constants import GC
+import civ4xml_utilities as gu
+
+class Civ4Xml(QtXml.QDomDocument):
+    def __init__(self, filePath):
+        QtXml.QDomDocument.__init__(self)
+
+        f = QtCore.QFile(filePath)
+        message = [False]
+        if f.open(QtCore.QIODevice.ReadOnly | QtCore.QIODevice.Text):
+            message = self.setContent(f)
+        f.close()
+
+        #assert message[0], 'domDocument setContent failed'
+        #assert not self.isNull(),  'domDocument is null'
+        
+        if not message[0] or self.isNull():
+            self.bXmlFail = True
+            return
+        else:
+            self.bXmlFail = False
+        
+        self.root = self.documentElement()
+        self.filePath = filePath
+        self.schemaFileName = self.getSchemaFileName()
+        self.schema = self.getSchema()
+
+    def getSchemaFileName(self):
+        attributes = self.root.attributes()
+        if attributes.size():
+            xmlns = attributes.item(0)
+            if xmlns.nodeName() == GC.XML_xmlns:
+                text = xmlns.nodeValue()
+                if text.startsWith(u'x-schema:'):
+                    return text.split(u'x-schema:')[-1]
+        
+        return u''
+    
+    def getSchema(self):
+        if self.schemaFileName:
+            xmlFileInfo = QtCore.QFileInfo(self.filePath)
+            currentDir = xmlFileInfo.absoluteDir()
+            schemaTargetFileInfo = QtCore.QFileInfo(currentDir, self.schemaFileName)
+            schemaTargetFilePath = schemaTargetFileInfo.absoluteFilePath()
+            
+            result = gu.searchXml(schemaTargetFilePath)
+            if result:
+                schemaFilePath = result[0]
+                return Civ4SchemaDict(schemaFilePath)
+                
+            else:
+                print 'schema not found', self.schemaFileName
+        
+        return None
+    
+    def rootNode(self):
+        return self.root
+        
+    def getBranchList(self):
+        branchList = []
+        flag = u''
+        
+        children = self.elementsByTagName(GC.LEADERTAG_FLAG_Type)
+        trunk = self.root.firstChildElement()
+        item = Civ4DomItem(trunk)
+        
+        ## CIV4XXXXinfos.xml
+        if children.size() != 0:
+            bCheckNodeName = False
+            if item.isInfosTag(bCheckNodeName):
+                flag = GC.LEADERTAG_FLAG_Type
+        ## CIV4RouteModelInfos.xml
+        elif item.isInfosTag():
+            flag = GC.LEADERTAG_FLAG_Infos
+        ## GlobalDefines.xml, CIV4GameText_BTS.xml, Schema, etc.
+        else:
+            trunk = self.root
+            item = Civ4DomItem(trunk)
+        
+        if flag != GC.LEADERTAG_FLAG_Type and flag != GC.LEADERTAG_FLAG_Infos:
+            if item.childElementsState() < 2:
+                flag = GC.LEADERTAG_FLAG_Repeated
+            else:
+                flag = GC.LEADERTAG_FLAG_Different
+                    
+        return item.childElements(), flag  ## QDomNode-list, unicode
+    
+class Civ4SchemaDict(object):
+    def __init__(self, filePath):
+        self.filePath = filePath
+        
+        if not GC.VERSION_schema:
+            return
+
+        self.schemaDocument = QtXml.QDomDocument()
+        self.hierarchyDict = {}
+        ## hierarchyDict[tagname] = 
+        ## { u'parent': parentList, u'children' : childList, u'attributes' : attributeList, u'elementMap' : elementDefinitionDict, u'attributeMap': attributeDefinitionDict, u'indicators': optional}
+        ## childList[i] = (child, minOccurs, maxOccurs)
+        
+        f = QtCore.QFile(filePath)
+        message = [False]
+        if f.open(QtCore.QIODevice.ReadOnly | QtCore.QIODevice.Text):
+            message = self.schemaDocument.setContent(f)
+        f.close()
+
+        #assert message[0], 'schema setContent failed'
+        #assert not self.schemaDocument.isNull(), 'schema is null'
+        
+        if not message[0] or self.schemaDocument.isNull():
+            return
+        
+        root = self.schemaDocument.documentElement()
+        elementTypeNodes = root.childNodes()
+        
+        for i in range(elementTypeNodes.size()):
+            elementType = elementTypeNodes.item(i)
+            
+            if elementType.isElement():
+                assert unicode(elementType.nodeName()) == GC.SCHEMA_ElementType, 'schema format error'
+                
+                attributeMap = elementType.attributes()
+                name = self.getAttribute(attributeMap, GC.SCHEMA_name)
+                content = self.getAttribute(attributeMap, GC.SCHEMA_content)
+                dt_type = self.getAttribute(attributeMap, GC.SCHEMA_dt_type)  ## dt:type
+                
+                if name not in self.hierarchyDict:
+                    self.hierarchyDict[name] = {}
+                if GC.HIERARCHY_parent not in self.hierarchyDict[name]:
+                    self.hierarchyDict[name][GC.HIERARCHY_parent] = []
+                self.hierarchyDict[name][GC.HIERARCHY_children] = []
+                self.hierarchyDict[name][GC.HIERARCHY_attributes] = []
+                self.hierarchyDict[name][GC.HIERARCHY_elementMap] = {}
+                self.hierarchyDict[name][GC.HIERARCHY_attributeMap] = {}
+                
+                self.hierarchyDict[name][GC.HIERARCHY_elementMap][GC.SCHEMA_content] = content
+                self.hierarchyDict[name][GC.HIERARCHY_elementMap][GC.SCHEMA_dt_type] = dt_type
+                
+                if not elementType.firstChildElement().isNull():
+                ## elementType has real children
+                
+                    elementNodes = elementType.childNodes()
+                    
+                    for j in range(elementNodes.size()):
+                        element = elementNodes.item(j)
+                        
+                        if element.isElement():
+                            elementName = unicode(element.nodeName())
+                            attributeMap = element.attributes()
+                            
+                            if elementName == GC.SCHEMA_element:
+                                typeName = self.getAttribute(attributeMap, GC.SCHEMA_type)
+                                minOccurs = self.getAttribute(attributeMap, GC.SCHEMA_minOccurs)
+                                maxOccurs = self.getAttribute(attributeMap, GC.SCHEMA_maxOccurs)
+                                
+                                if typeName not in self.hierarchyDict:
+                                    self.hierarchyDict[typeName] = {}
+                                if GC.HIERARCHY_parent not in self.hierarchyDict[typeName]:
+                                    self.hierarchyDict[typeName][GC.HIERARCHY_parent] = []
+                                self.hierarchyDict[typeName][GC.HIERARCHY_parent].append(name)
+                                
+                                self.hierarchyDict[name][GC.HIERARCHY_children].append((typeName, minOccurs, maxOccurs))
+                            
+                            elif elementName == GC.SCHEMA_group:
+                                if GC.HIERARCHY_indicators not in self.hierarchyDict[name]:
+                                    self.hierarchyDict[name][GC.HIERARCHY_indicators] = []
+                                
+                                indicator = {}
+                                order = self.getAttribute(attributeMap, GC.SCHEMA_order)
+                                minOccurs = self.getAttribute(attributeMap, GC.SCHEMA_minOccurs)
+                                maxOccurs = self.getAttribute(attributeMap, GC.SCHEMA_maxOccurs)
+                                
+                                indicator[GC.SCHEMA_order] = order
+                                indicator[GC.SCHEMA_minOccurs] = minOccurs
+                                indicator[GC.HIERARCHY_elements] = []
+                                
+                                indicatorElements = element.childNodes()
+                                for k in range(indicatorElements.size()):
+                                    indicatorElement = indicatorElements.item(k)
+                                    if indicatorElement.isElement():
+                                        if unicode(indicatorElement.nodeName()) == GC.SCHEMA_element:
+                                            indicatorElementName = self.getAttribute(indicatorElement.attributes(), GC.SCHEMA_type)
+                                            indicator[GC.HIERARCHY_elements].append(indicatorElementName)
+                                            self.hierarchyDict[name][GC.HIERARCHY_children].append((indicatorElementName, minOccurs, maxOccurs))
+                                            
+                                print 'special element group'
+                            
+                            elif elementName == GC.SCHEMA_AttributeType:
+                                attributeTypeName = self.getAttribute(attributeMap, GC.SCHEMA_name)
+                                required = self.getAttribute(attributeMap, GC.SCHEMA_required)
+                                self.hierarchyDict[name][GC.HIERARCHY_attributeMap][GC.SCHEMA_name] = attributeTypeName
+                                self.hierarchyDict[name][GC.HIERARCHY_attributeMap][GC.SCHEMA_required] = required
+                                print 'special element AttributeType'
+                                
+                            elif elementName == GC.SCHEMA_attribute:
+                                attributeName = self.getAttribute(attributeMap, GC.SCHEMA_type)
+                                self.hierarchyDict[name][GC.HIERARCHY_attributes].append(attributeName)
+                                print 'special element attribute'
+                            
+                            else:
+                                print 'unidentified element'
+    
+    def isNull(self):
+        return bool(self.hierarchyDict)
+    
+    def getAttribute(self, attributeMap, name):
+        attributeNode = attributeMap.namedItem(name)
+        
+        if attributeNode.isNull():
+            return u''
+        else:
+            return unicode(attributeNode.nodeValue())
+    
+    def getParent(self, name):
+        assert name in self.hierarchyDict, 'name not in hierarchyDict'
+        
+        return self.hierarchyDict[name][GC.HIERARCHY_parent]
+    
+    def getChildren(self, name):
+        assert name in self.hierarchyDict, 'name not in hierarchyDict'
+        
+        return self.hierarchyDict[name][GC.HIERARCHY_children]
+    
+    def hasChild(self, name, child = None):
+        assert name in self.hierarchyDict, 'name not in hierarchyDict'
+        
+        if child == None:
+            return len(self.hierarchyDict[name][GC.HIERARCHY_children])
+        else:
+            for childTuple in self.hierarchyDict[name][GC.HIERARCHY_children]:
+                if child == childTuple[0]:
+                    return True
+            return False
+    
+    def hasParent(self, name, parent = None):
+        assert name in self.hierarchyDict, 'name not in hierarchyDict'
+        
+        if parent == None:
+            return len(self.hierarchyDict[name][GC.HIERARCHY_parent])
+        else:
+            return parent in self.hierarchyDict[name][GC.HIERARCHY_parent]
+
+
+class Civ4DomItem(QtXml.QDomNode):
+    def __init__(self, node, position = (0,0), parent = None, generation = 0):
+        QtXml.QDomNode.__init__(self, node)
+        
+        self.domNode = node
+        ## Record the item's location within its parent.
+        self.rowNumber, self.columnNumber = position
+        self.generation = generation
+        self.parentItem = parent  ## Civ4DomItem instance
+        
+        self.childItems = {}  ## int-Civ4DomItem dict
+        self.root = self.ownerDocument().documentElement()
+        
+    def node(self):
+        return self.domNode
+
+    def parent(self):
+        return self.parentItem
+
+    def child(self, i = None, j = None):
+        if i == None:
+            i = self.rowNumber
+        if j == None:
+            j = self.columnNumber
+            
+        if self.isParentOfText():
+            return None
+        
+        if self.childItems.has_key(i):
+            return self.childItems[i]
+
+        if i >= 0 and i < self.childNodes().size():
+            childNode = self.childNodes().item(i)
+            childItem = Civ4DomItem(childNode, (i, j), self, self.generation + 1)
+            self.childItems[i] = childItem
+            return childItem
+
+        return None
+
+    def row(self):
+        return self.rowNumber
+    
+    def column(self):
+        return self.columnNumber
+
+    def setValueText(self, text):
+        assert self.isParentOfText(), 'wrong call, node is not ParentOfText'
+        
+        if self.hasChildNodes():
+            if text:
+                self.firstChild().setNodeValue(text)
+            else:
+                self.removeChild(self.firstChild())
+            
+        elif text:
+            textNode = self.ownerDocument().createTextNode(text)
+            self.node().appendChild(textNode)
+        
+    def valueText(self):
+        assert self.isParentOfText(), 'wrong call, node is not ParentOfText'
+        
+        if self.childNodes().size():
+            return self.firstChild().nodeValue()
+        
+        return self.nodeValue() ## QString('')
+        
+    def attributesText(self):
+        attributes = QtCore.QStringList()
+        attributeMap = self.attributes()
+        
+        for i in range(attributeMap.size()):
+            attribute = attributeMap.item(i)
+            attributes.append(attribute.nodeName() + "=\"" + attribute.nodeValue() + "\"")
+            
+        return attributes.join(" ")
+    
+    def fullname(self):
+        return self.nodeName() + QtCore.QString(u' ') + self.attributesText()
+    
+    def value(self):
+        if self.isParentOfText():
+            if not self.valueText().isEmpty():
+                return self.valueText()
+        
+        return self.fullname()
+
+    def getGeneration(self):
+        child = self.domNode
+        if not child.isElement() and not child.isComment() :
+            return -1
+            
+        i = 0
+        while True:
+            if child == self.root:
+                return i
+            else:
+                i += 1
+                child = child.parentNode()        
+    
+    def childElements(self):
+        children = []
+        
+        child = self.firstChildElement()
+            
+        while not child.isNull():
+            children.append(child)
+            child = child.nextSiblingElement()
+            
+        return children  ## QDomNode-list
+
+    def getChildElementItemByIndex(self, iIndex):
+        return Civ4DomItem(self.childElements()[iIndex])
+    
+    def getPeerIndex(self):
+        me = self.node()
+        parentNode = me.parentNode()
+
+        if parentNode.isNull():
+            return -2
+        
+        iIndex = 0
+        node = parentNode.firstChild()
+        
+        while True:
+            if node == me:
+                return iIndex
+            else:
+                iIndex += 1
+                node = node.nextSibling()
+                
+    def getPeerElementIndex(self):
+        if not self.isElement():
+            return -1
+        
+        me = self.node()
+        parentNode = me.parentNode()
+        
+        if parentNode.isNull():
+            return -2
+        
+        iIndex = 0
+        node = parentNode.firstChildElement()
+        
+        while True:
+            if node == me:
+                return iIndex
+            else:
+                iIndex += 1
+                node = node.nextSiblingElement()
+    
+    def getHierarchyIndexList(self, ancestorNode):
+        assert self.isDescendant(ancestorNode)
+        
+        hierarchyIndexList = []
+        node = self.node()
+        parentNode = node.parentNode()
+        
+        while node != ancestorNode:
+            iIndex = Civ4DomItem(node).getPeerIndex()
+            hierarchyIndexList.insert(0, iIndex)
+            node = node.parentNode()
+        
+        return hierarchyIndexList
+    
+    def getHierarchyNameQStringList(self, ancestorNode):
+        assert self.isDescendant(ancestorNode)
+        
+        node = self.node()
+        parentNode = node.parentNode()
+        hierarchyNameQStringLis = QtCore.QStringList(node.nodeName())
+        
+        while node != ancestorNode:
+            node = node.parentNode()
+            hierarchyNameQStringLis.insert(0, node.nodeName())
+        
+        return hierarchyNameQStringLis
+
+    def isDescendant(self, ancestorNode):
+        node = self.node()
+        while not node.isNull():
+            if node == ancestorNode:
+                return True
+            else:
+                node = node.parentNode()
+        
+        return False
+    
+    def isAncestor(self, descendantNode):
+        ancestorNode = self.node()
+        while not descendantNode.isNull():
+            if ancestorNode == descendantNode:
+                return True
+            else:
+                descendantNode = descendantNode.parentNode()
+        
+        return False
+
+    def childElementsState(self, bCheckAttributes=True):
+        children = self.childElements()
+        state = len(children)
+        
+        if state < 2:
+            return state
+        else:
+            firstChildItem = Civ4DomItem(children[0])
+            if firstChildItem.hasDifferentElementSibling(bCheckAttributes):
+                return 2
+            else:
+                return 1
+
+    def hasDifferentElementSibling(self, bCheckAttributes = False):
+        myname = self.nodeName()
+        me = self.node()
+        node = self.parentNode().firstChildElement()
+        
+        while not node.isNull():
+            if node != me:
+                name = node.nodeName()
+                if myname != name or (node.attributes().size() != 0 and bCheckAttributes):
+                    return True
+            
+            node = node.nextSiblingElement()
+        
+        return False
+            
+    def isTag(self):
+        if self.isElement():
+            if self.getGeneration() > 0:
+                return True
+        return False
+
+    def isParentOfText(self):
+        if not self.isTag():
+            return False
+            
+        children = self.childNodes()
+        if children.size() == 1:
+            childNode = children.item(0)
+            if childNode.isText():
+                return True
+
+        elif children.size() == 0:
+            if self.isElement():
+                return True
+            
+        return False
+
+    def isInfosTag(self, bCheckName=True):
+        if self.isTag():
+            if self.getGeneration() == 1 and self.nextSiblingElement().isNull() and self.previousSiblingElement().isNull():
+                if self.childElementsState() == 0:
+                    return True
+                elif self.childElementsState() == 1:
+                    if not bCheckName:
+                        return True
+                    else:
+                        childname = unicode(self.firstChildElement().nodeName())
+                        name = unicode(self.nodeName())
+                        ## ex. infos, info
+                        if name == childname + u's':
+                            return True
+                        ## ex. categories, category
+                        else:
+                            if name[:-3] == childname[:-2] and name[-3:] == u'ies' and name[-1] == u'y':
+                                return True
+        return False
+
+    def isInfoTag(self, bCheckName=True):
+        return Civ4DomItem(self.parentNode()).isInfosTag(bCheckName)
+        
+    def isChildOfInfoTag(self, bCheckName=False):
+        return Civ4DomItem(self.parentNode()).isInfoTag(bCheckName)
+    
+    def isParentOfTagPair(self):
+        if self.childElementsState(False) != 2:
+            return False
+        
+        children = self.childElements()
+        if len(children) > 2:
+            return False
+            
+        for child in children:
+            if not Civ4DomItem(child).isParentOfText():
+                return False
+        
+        return True
+    
+    def getQueryTagItem(self):
+        assert not self.isInfoTag(False)
+        assert not self.isInfosTag(False)
+        assert self.getGeneration() >= 2
+        
+        item = self
+        while True:
+            if item.isParentOfTagPair():
+                return (item, GC.TAGQUERY_FLAG_TagPair)
+                
+            elif item.isChildOfInfoTag() or item.getGeneration() == 2:
+                if item.isParentOfText():
+                    return (item, GC.TAGQUERY_FLAG_Text)
+                return (item, u'')
+            
+            item = Civ4DomItem(item.parentNode())
+    
+    def getBranchAncestor(self, flag = ''):
+        assert not self.isInfoTag(False) and not self.isInfosTag(False) and self.getGeneration() >= 2
+        
+        if flag != GC.LEADERTAG_FLAG_Repeated and flag != GC.LEADERTAG_FLAG_Different:
+            ## root - infos - info
+            generation = 2
+        else:
+            ## root - tag
+            generation = 1
+        
+        item = self
+        while True:
+            if item.getGeneration() == generation:
+                return item.node()
+            item = Civ4DomItem(item.parentNode())
+    
+    def getLeaderTag(self, flag = ''):
+        branchAncestor = self.getBranchAncestor(flag)
+            
+        if flag == GC.LEADERTAG_FLAG_Different:
+            return branchAncestor
+        else:
+            if flag != GC.LEADERTAG_FLAG_Type:
+                flag = QtCore.QString()
+                
+            leaderTag = branchAncestor.firstChildElement(flag)
+            if leaderTag.isNull():
+                print 'Civ4DomItem, getLeaderTag', branchAncestor.nodeName()
+                return branchAncestor
+            else:
+                return leaderTag
+        
+class Civ4LeaderTagModel(QtCore.QAbstractItemModel):
+    def __init__(self, branchList, flag, parent=None):
+        ## branchList is a List of QDomNode
+        QtCore.QAbstractItemModel.__init__(self, parent)
+
+        self.update(branchList, flag)
+    
+    def update(self, branchList, flag):
+        self.leaderTagList = []
+        self.flag = flag
+        
+        if flag == GC.LEADERTAG_FLAG_Type:
+            for node in branchList:
+                leaderTag = node.firstChildElement(flag)
+                if leaderTag.isNull():
+                    raise '<Type> missing error'
+                    leaderTag = node
+                self.leaderTagList.append(leaderTag)
+        
+        elif flag == GC.LEADERTAG_FLAG_Infos:
+            for node in branchList:
+                leaderTag = node.firstChildElement()
+                if leaderTag.isNull():
+                    raise 'no sub-tag in InfoTag'
+                    leaderTag = node
+                self.leaderTagList.append(leaderTag)
+            
+            if self.leaderTagList:
+                self.flag = unicode(self.leaderTagList[0].nodeName())
+
+        elif flag == GC.LEADERTAG_FLAG_Repeated:
+            for node in branchList:
+                leaderTag = node.firstChildElement()
+                if leaderTag.isNull():
+                    print 'no child'
+                    leaderTag = node
+                self.leaderTagList.append(leaderTag)
+                
+        elif flag == GC.LEADERTAG_FLAG_Different:
+            self.leaderTagList = branchList
+                
+        else:
+            raise 'leaderTagList error'
+    
+    def getLeaderTags(self):
+        return (self.leaderTagList, self.flag)
+    
+    def getLeaderTagIndex(self,  rowNumber, columnNumber = 0):
+        return self.index(rowNumber, columnNumber, QtCore.QModelIndex())
+
+    def columnCount(self, parent):
+        return 3
+
+    def data(self, index, role = QtCore.Qt.DisplayRole):
+        if not index.isValid():
+            return QtCore.QVariant()
+
+        if role != QtCore.Qt.DisplayRole:
+            return QtCore.QVariant()
+
+        node = index.internalPointer()
+        item = Civ4DomItem(node)
+            
+        if index.column() == 0:
+            return QtCore.QVariant(item.nodeName())
+        
+        elif index.column() == 1:
+            if self.flag != GC.LEADERTAG_FLAG_Different:
+                text = item.value()
+            else:
+                text = item.fullname()
+            return QtCore.QVariant(text)
+        
+        elif index.column() == 2:
+            return QtCore.QVariant(index.row() + 1)
+
+        else:
+            return QtCore.QVariant()
+
+    def flags(self, index):
+        if not index.isValid():
+            return QtCore.Qt.ItemIsEnabled
+                
+        return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+
+    def headerData(self, section, orientation, role):
+        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
+            if section == 0:
+                if self.flag != GC.LEADERTAG_FLAG_Different and self.flag != GC.LEADERTAG_FLAG_Repeated:
+                    return QtCore.QVariant(self.tr(self.flag))
+                else:
+                    if self.leaderTagList:
+                        return QtCore.QVariant(self.tr(self.leaderTagList[0].parentNode().nodeName()))
+            elif section == 1:
+                return QtCore.QVariant(self.tr("Value"))
+            elif section == 2:
+                return QtCore.QVariant(self.tr("#"))
+            else:
+                return QtCore.QVariant()
+
+        return QtCore.QVariant()
+
+    def index(self, row, column, parent):
+        if row < 0 or column < 0 or row >= self.rowCount(parent) or column >= self.columnCount(parent):
+            return QtCore.QModelIndex()
+
+        if not parent.isValid():
+            return self.createIndex(row, column, self.leaderTagList[row])
+        else:
+            return QtCore.QModelIndex()
+
+    def parent(self, child):
+        return QtCore.QModelIndex()
+
+    def rowCount(self, parent):
+        if not parent.isValid():
+            return len(self.leaderTagList)
+        else:
+            return 0
+
+class Civ4DomModel(QtCore.QAbstractItemModel):
+    ## document is a QDomNode
+    def __init__(self, document, parent=None):
+        QtCore.QAbstractItemModel.__init__(self, parent)
+
+        self.domDocument = document  ## QDomNode
+        self.rootItem = Civ4DomItem(self.domDocument)
+        self.leaderTagIndex = 0
+    
+    def update(self, document, index = 0):
+        self.domDocument = document
+        self.rootItem = Civ4DomItem(self.domDocument)
+        self.leaderTagIndex = index
+
+    def getIndexByItem(self, item, columnNumber = 0):
+        if not item.isDescendant(self.rootItem.node()):
+            return None
+        
+        hierarchyIndexList = item.getHierarchyIndexList(self.rootItem.node())
+        index = QtCore.QModelIndex()
+        
+        for i in hierarchyIndexList:
+            index = self.index(i, 0, index)
+        
+        if index.isValid():
+            return index
+        else:
+            return None
+
+    def columnCount(self, parent):
+        return 4
+
+    def data(self, index, role = QtCore.Qt.DisplayRole):
+        if not index.isValid():
+            return QtCore.QVariant()
+
+        if role != QtCore.Qt.DisplayRole:
+            return QtCore.QVariant()
+        
+        item = index.internalPointer()
+
+        if index.column() == 0:
+            return QtCore.QVariant(item.nodeName())
+        
+        elif index.column() == 1:
+            return QtCore.QVariant(item.attributesText())
+
+        elif index.column() == 2:
+            if item.isParentOfText():
+                return QtCore.QVariant(item.valueText().split("\n").join(" "))
+                
+            return QtCore.QVariant(item.nodeValue().split("\n").join(" "))
+        
+        elif index.column() == 3:
+            return QtCore.QVariant(index.row() + 1)
+            
+        else:
+            return QtCore.QVariant()
+
+    def setData(self, index, value, role = QtCore.Qt.EditRole): 
+        if index.column() == 2 and role == QtCore.Qt.EditRole:
+            item = index.internalPointer()
+            
+            if item.isParentOfText():
+                if item.valueText() != value.toString():
+                    item.setValueText(value.toString())
+                    self.emit(QtCore.SIGNAL("dataChanged(const QModelIndex&, const QModelIndex&)"),  index,  index)
+                    self.emit(QtCore.SIGNAL("nodeTextChanged(const QModelIndex&)"),  index)
+                    return True
+        
+        return False
+
+    def flags(self, index):
+        if not index.isValid():
+            return QtCore.Qt.ItemIsEnabled
+
+        if index.column() == 2:
+            item = index.internalPointer()
+            if item.isParentOfText():
+                return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable    
+
+        return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+    
+    def headerData(self, section, orientation, role):
+        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
+            if section == 0:
+                return QtCore.QVariant(self.tr("Name"))
+            elif section == 1:
+                return QtCore.QVariant(self.tr("Attributes"))
+            elif section == 2:
+                return QtCore.QVariant(self.tr("Value"))
+            elif section == 3:
+                return QtCore.QVariant(self.tr("#"))
+            else:
+                return QtCore.QVariant()
+
+        return QtCore.QVariant()
+
+    def index(self, row, column, parent):
+        if row < 0 or column < 0 or row >= self.rowCount(parent) or column >= self.columnCount(parent):
+            return QtCore.QModelIndex()
+
+        if not parent.isValid():
+            parentItem = self.rootItem
+        else:
+            parentItem = parent.internalPointer()
+        
+        childItem = parentItem.child(row)
+        
+        if childItem:
+            return self.createIndex(row, column, childItem)
+        else:
+            return QtCore.QModelIndex()
+
+    def parent(self, child):
+        if not child.isValid():
+            return QtCore.QModelIndex()
+
+        childItem = child.internalPointer()
+        parentItem = childItem.parent()
+
+        if not parentItem or parentItem == self.rootItem:
+            return QtCore.QModelIndex()
+
+        return self.createIndex(parentItem.row(), 0, parentItem)
+
+    def rowCount(self, parent):
+        if parent.column() > 0:
+            return 0
+
+        if not parent.isValid():
+            parentItem = self.rootItem
+        else:
+            parentItem = parent.internalPointer()
+
+        if parentItem.isParentOfText():
+            return 0
+        
+        return parentItem.childNodes().size()
+
+class Civ4TagQueryModel(QtCore.QAbstractItemModel):
+    def __init__(self, leaderTags, tags, parent=None):
+        QtCore.QAbstractItemModel.__init__(self, parent)
+
+        self.update(leaderTags, tags)
+        self.templateItem = None
+        
+    def update(self, leaderTags, tags, templateItem = None):
+        self.tagList, self.tagFlag = tags
+        self.leaderTagList, self.leaderTagFlag = leaderTags
+        self.templateItem = templateItem
+        
+        self.leaderTagItemList = []
+        self.tagItemList = []
+        for i in range(len(self.leaderTagList)):
+            self.leaderTagItemList.append(Civ4DomItem(self.leaderTagList[i], (i,0), self.leaderTagFlag))
+            self.tagItemList.append(Civ4DomItem(self.tagList[i], (i,1)))
+    
+    def getLeaderTagIndex(self, index):
+        if not index.isValid():
+            return None
+        
+        while True:
+            parent = index.parent()
+            if parent.isValid():
+                index = parent
+            else:
+                return index.sibling(index.row(), 2)
+    
+    def getRealItem(self, index):
+        item = index.internalPointer()
+        if self.tagFlag == GC.TAGQUERY_FLAG_TagPair:
+            item = Civ4DomItem(item.lastChildElement())
+            
+        return item
+        
+    def columnCount(self, parent):
+        if not parent.isValid():
+            return 4
+        
+        return 2
+
+    def data(self, index, role = QtCore.Qt.DisplayRole):
+        if not index.isValid():
+            return QtCore.QVariant()
+
+        if role != QtCore.Qt.DisplayRole:
+            return QtCore.QVariant()
+        
+        item = index.internalPointer()
+        
+        if self.tagFlag == GC.TAGQUERY_FLAG_TagPair:
+            if index.column() == 0:
+                text = Civ4DomItem(item.firstChildElement()).valueText().split("\n").join(" ")
+                return QtCore.QVariant(text)
+                
+            elif index.column() == 1:
+                text = Civ4DomItem(item.lastChildElement()).valueText().split("\n").join(" ")
+                return QtCore.QVariant(text)
+        
+        if not item.parent() or item.parent() == self.leaderTagFlag:
+            if index.column() == 0:
+                return QtCore.QVariant(item.nodeName())
+
+            elif index.column() == 1:
+                if item.isParentOfText():
+                    text = item.valueText().split("\n").join(" ")
+                else:
+                    text = item.nodeValue().split("\n").join(" ")
+                    
+                return QtCore.QVariant(text)
+                
+            elif index.column() == 2:
+                if self.leaderTagFlag != GC.LEADERTAG_FLAG_Different:
+                    text = item.value()
+                else:
+                    text = item.fullname()
+                return QtCore.QVariant(text)
+            
+            elif index.column() == 3:
+                return QtCore.QVariant(index.row() + 1)
+                
+        else:
+            if index.column() == 0:
+                return QtCore.QVariant(item.nodeName())
+
+            elif index.column() == 1:
+                if item.isParentOfText():
+                    return QtCore.QVariant(item.valueText().split("\n").join(" "))
+
+                return QtCore.QVariant(item.nodeValue().split("\n").join(" "))
+                
+        return QtCore.QVariant()
+
+    def setData(self, index, value, role = QtCore.Qt.EditRole): 
+        if index.column() == 1 and role == QtCore.Qt.EditRole:
+            item = index.internalPointer()
+            
+            if self.tagFlag == GC.TAGQUERY_FLAG_TagPair:
+                if Civ4DomItem(item.lastChildElement()).valueText() != value.toString():
+                    Civ4DomItem(item.lastChildElement()).setValueText(value.toString())
+                    self.emit(QtCore.SIGNAL("dataChanged(const QModelIndex&, const QModelIndex&)"),  index,  index)
+                    self.emit(QtCore.SIGNAL("nodeTextChanged(const QModelIndex&)"),  index)
+                    return True
+                    
+            elif item.isParentOfText():
+                if item.valueText() != value.toString():
+                    item.setValueText(value.toString())
+                    self.emit(QtCore.SIGNAL("dataChanged(const QModelIndex&, const QModelIndex&)"),  index,  index)
+                    self.emit(QtCore.SIGNAL("nodeTextChanged(const QModelIndex&)"),  index)
+                    return True
+        
+        return False
+        
+    def flags(self, index):
+        if not index.isValid():
+            return QtCore.Qt.ItemIsEnabled
+
+        if index.column() == 1:
+            item = index.internalPointer()
+            if self.tagFlag == GC.TAGQUERY_FLAG_TagPair or item.isParentOfText():
+                return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable    
+
+        return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+
+    def headerData(self, section, orientation, role):
+        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
+            if section == 0:
+                return QtCore.QVariant(self.tr("Tag"))
+            elif section == 1:
+                return QtCore.QVariant(self.tr("Value"))
+            elif section == 2:
+                if self.leaderTagFlag != GC.LEADERTAG_FLAG_Different and self.leaderTagFlag != GC.LEADERTAG_FLAG_Repeated:
+                    return QtCore.QVariant(self.tr(self.leaderTagFlag))
+                else:
+                    if self.leaderTagList:
+                        return QtCore.QVariant(self.tr(self.leaderTagList[0].parentNode().nodeName()))
+            elif section == 3:
+                return QtCore.QVariant(self.tr("#"))
+            else:
+                return QtCore.QVariant()
+
+        return QtCore.QVariant()
+
+    def index(self, row, column, parent):
+        if row < 0 or column < 0 or row >= self.rowCount(parent) or column >= self.columnCount(parent):
+            return QtCore.QModelIndex()
+
+        if not parent.isValid():
+            if column == 2:
+                return self.createIndex(row, column, self.leaderTagItemList[row])
+            else:
+                return self.createIndex(row, column, self.tagItemList[row])
+         
+        ## redundant, double check
+        elif self.tagFlag == GC.TAGQUERY_FLAG_TagPair:
+            return QtCore.QModelIndex()
+            
+        else:
+            parentItem = parent.internalPointer()
+
+        childItem = parentItem.child(row)
+        
+        if childItem:
+            return self.createIndex(row, column, childItem)
+        else:
+            return QtCore.QModelIndex()
+            
+    def parent(self, child):
+        if not child.isValid():
+            return QtCore.QModelIndex()
+        
+        childItem = child.internalPointer()  ## Civ4DomItem instance
+        parentItem = childItem.parent()
+        
+        if not parentItem or parentItem == self.leaderTagFlag:
+            return QtCore.QModelIndex()
+        else:
+            return self.createIndex(parentItem.row(), 0, parentItem)
+    
+    def rowCount(self, parent):
+        if not parent.isValid():
+            return len(self.tagList)
+        else:
+            if self.tagFlag == GC.TAGQUERY_FLAG_TagPair:
+                return 0
+                
+            parentItem = parent.internalPointer()
+            
+            ## leaderTag
+            if parentItem == self.leaderTagFlag:
+                return 0
+            ## tag
+            else:
+                if parent.column() != 0:
+                    return 0
+
+                if parentItem.isParentOfText():
+                    return 0
+
+                return parentItem.childNodes().size()
+
+
+class Civ4SortFilterProxyModel(QtGui.QSortFilterProxyModel):
+    def __init__(self, parent = None):
+        QtGui.QSortFilterProxyModel.__init__(self, parent)
+        
+        self.setDynamicSortFilter(True)
+    
+    def lessThan(self, left, right):
+        ## TAGQUERY_ColumnNumber_value = 1
+        if left.column() == 1 and right.column() == 1:
+            dataLeft = left.data()
+            dataRight = right.data()
+            i, bi = dataLeft.toInt()
+            j, bj = dataRight.toInt()
+            
+            if bi and bj:
+                return i < j
+                
+        return QtGui.QSortFilterProxyModel.lessThan(self, left, right)
+    
+    def toHtml(self, rootIndex = QtCore.QModelIndex()): 
+        if not self.rowCount(rootIndex):
+            return u''
+        
+        tagColumn = GC.TAGQUERY_ColumnNumber_tag
+        leaderTagColumn = GC.TAGQUERY_ColumnNumber_leaderTag
+        valueColumn = GC.TAGQUERY_ColumnNumber_value
+
+        line1 = QtCore.QStringList()
+        line2 = QtCore.QStringList()
+        
+        line1.append(u'<tr><td> </td>')
+        line2.append(u'<tr><td> ' + self.data(self.index(0, tagColumn, rootIndex), QtCore.Qt.DisplayRole).toString() + u'</td>')
+        
+        for i in range(self.rowCount(rootIndex)):
+            text1 = self.data(self.index(i, leaderTagColumn, rootIndex), QtCore.Qt.DisplayRole).toString()
+            text2 = self.data(self.index(i, valueColumn, rootIndex), QtCore.Qt.DisplayRole).toString()
+            line1.append(u'<td> ' + text1 + u'</td>')
+            line2.append(u'<td> ' + text2 + u'</td>')
+        
+        line1.append(u'</tr>')
+        line2.append(u'</tr>')
+        
+        output = QtCore.QStringList()
+        output.append(u'<table>')
+        output.append(line1.join(u''))
+        output.append(line2.join(u''))
+        output.append(u'</table>')
+        
+        return output.join(u'\n')
