@@ -14,7 +14,7 @@ setup(
     data_files = Mydata_files,
     options = {"py2exe": {
                             "includes": ["sip"],
-                            "optimize": 2
+                            "optimize": 1
                             }
                 }
     )

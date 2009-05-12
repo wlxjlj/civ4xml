@@ -939,7 +939,7 @@ class Civ4Window(QtGui.QMainWindow):
                 f.close()
                 
             else:
-                text = 'abc'
+                text = u'reame.txt not found'
         
             widget = self.initXmlSourceViewWidget(GC.WINDOW_help_contents)
             widget.setHelpContents(text)
@@ -954,6 +954,7 @@ class Civ4Window(QtGui.QMainWindow):
         m = Civ4XmlMessageBox()
         m.setup(m.getLicense)
         m.exec_()
+
 
 def initGlobals(app, argv):
     GC.g_XmlDir_Vanilla, GC.g_XmlDir_Wl, GC.g_XmlDir_BtS = gu.readCiv4Registry()
@@ -1041,9 +1042,6 @@ def loadDisplaySettings(g_DICT, settings):
     
     
 def main():
-    g_D = gu.DebugLog()
-    g_E = gu.ErrorLog()
-    
     app = QtGui.QApplication(sys.argv)
     
     initGlobals(app, sys.argv)
@@ -1051,9 +1049,6 @@ def main():
     mywindow = Civ4Window()
     mywindow.show()
     app.exec_()
-    
-    g_D.close()
-    g_E.close()
 
 if __name__=='__main__':
     main()
