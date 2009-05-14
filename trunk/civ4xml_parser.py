@@ -1046,12 +1046,48 @@ class Civ4TagQueryModel(QtCore.QAbstractItemModel):
                 return parentItem.childNodes().size()
 
 
+class Civ4InfoSortFilterProxyModel(QtGui.QSortFilterProxyModel):
+    def __init__(self, parent = None):
+        QtGui.QSortFilterProxyModel.__init__(self, parent)
+    
+    def filterAcceptsRow (self, source_row, source_parent ):
+        if not GC.INI_filter_deep:
+            return QtGui.QSortFilterProxyModel.filterAcceptsRow(self, source_row, source_parent)
+
+        model = self.sourceModel()
+        source_child = model.index(source_row, 0, source_parent)
+        
+        if model.rowCount(source_child) == 0:
+            return QtGui.QSortFilterProxyModel.filterAcceptsRow(self, source_row, source_parent)
+        else:
+            for i in range(model.rowCount(source_child)):
+                    if self.filterAcceptsRow(i, source_child):
+                        return True
+        
+        return False
+
 class Civ4SortFilterProxyModel(QtGui.QSortFilterProxyModel):
     def __init__(self, parent = None):
         QtGui.QSortFilterProxyModel.__init__(self, parent)
         
         self.setDynamicSortFilter(True)
-    
+
+    def filterAcceptsRow (self, source_row, source_parent ):
+        if not GC.INI_filter_deep:
+            return QtGui.QSortFilterProxyModel.filterAcceptsRow(self, source_row, source_parent)
+
+        model = self.sourceModel()
+        source_child = model.index(source_row, 0, source_parent)
+        
+        if model.rowCount(source_child) == 0:
+            return QtGui.QSortFilterProxyModel.filterAcceptsRow(self, source_row, source_parent)
+        else:
+            for i in range(model.rowCount(source_child)):
+                    if self.filterAcceptsRow(i, source_child):
+                        return True
+        
+        return False
+
     def lessThan(self, left, right):
         ## TAGQUERY_ColumnNumber_value = 1
         if left.column() == 1 and right.column() == 1:
@@ -1073,17 +1109,20 @@ class Civ4SortFilterProxyModel(QtGui.QSortFilterProxyModel):
         leaderTagColumn = GC.TAGQUERY_ColumnNumber_leaderTag
         valueColumn = GC.TAGQUERY_ColumnNumber_value
 
+        TableItem = QtCore.QString(u'<td> %1 <td>')
         line1 = QtCore.QStringList()
         line2 = QtCore.QStringList()
         
-        line1.append(u'<tr><td> </td>')
-        line2.append(u'<tr><td> ' + self.data(self.index(0, tagColumn, rootIndex), QtCore.Qt.DisplayRole).toString() + u'</td>')
+        line1.append(u'<tr>')
+        line2.append(u'<tr>')
+        line1.append(TableItem.arg(u''))
+        line2.append(TableItem.arg(self.data(self.index(0, tagColumn, rootIndex), QtCore.Qt.DisplayRole).toString()))
         
         for i in range(self.rowCount(rootIndex)):
             text1 = self.data(self.index(i, leaderTagColumn, rootIndex), QtCore.Qt.DisplayRole).toString()
             text2 = self.data(self.index(i, valueColumn, rootIndex), QtCore.Qt.DisplayRole).toString()
-            line1.append(u'<td> ' + text1 + u'</td>')
-            line2.append(u'<td> ' + text2 + u'</td>')
+            line1.append(TableItem.arg(text1))
+            line2.append(TableItem.arg(text2))
         
         line1.append(u'</tr>')
         line2.append(u'</tr>')
@@ -1092,6 +1131,42 @@ class Civ4SortFilterProxyModel(QtGui.QSortFilterProxyModel):
         output.append(u'<table>')
         output.append(line1.join(u''))
         output.append(line2.join(u''))
+        output.append(u'</table>')
+        
+        return output.join(u'\n')
+        
+    def toHtmlStats(self, rootIndex = QtCore.QModelIndex()): 
+        if not self.rowCount(rootIndex):
+            return u''
+        
+        tagColumn = GC.TAGQUERY_ColumnNumber_tag
+        leaderTagColumn = GC.TAGQUERY_ColumnNumber_leaderTag
+        valueColumn = GC.TAGQUERY_ColumnNumber_value
+        
+        #TableItem = QtCore.QString(u'<td> %1 <td>')
+        TableRow = QtCore.QString(u'<tr><td> %1 <td><td> %2 <td><tr>')
+        statsDict = {}
+        
+        for i in range(self.rowCount(rootIndex)):
+            typeName = self.data(self.index(i, leaderTagColumn, rootIndex), QtCore.Qt.DisplayRole).toString()
+            key = self.data(self.index(i, valueColumn, rootIndex), QtCore.Qt.DisplayRole).toString()
+            
+            if key not in statsDict:
+                statsDict[key] = QtCore.QStringList()
+
+            statsDict[key].append(typeName)
+        
+        output = QtCore.QStringList()
+        output.append(u'<table>')
+        
+        firstRow = TableRow.arg(self.data(self.index(0, tagColumn, rootIndex), QtCore.Qt.DisplayRole).toString()).arg(u'Type')
+        output.append(firstRow)
+        
+        keys = statsDict.keys()
+        keys.sort(gu.cmpTagValue)
+        for key in keys:
+            output.append(TableRow.arg(key).arg(statsDict[key].join(u', ')))
+            
         output.append(u'</table>')
         
         return output.join(u'\n')

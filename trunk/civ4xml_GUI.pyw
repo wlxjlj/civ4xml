@@ -50,7 +50,8 @@ class Civ4XmlWidget(Civ4XmlBaseWidget):
         self.leaderTagProxyModel.setSourceModel(self.civ4LeaderTagModel)
         self.leaderTagTreeView.setModel(self.leaderTagProxyModel)
         
-        self.infoProxyModel = QtGui.QSortFilterProxyModel(self)
+        #self.infoProxyModel = QtGui.QSortFilterProxyModel(self)
+        self.infoProxyModel = Civ4InfoSortFilterProxyModel(self)
         self.infoProxyModel.setSourceModel(self.civ4DomModel)
         self.infoTreeView.setModel(self.infoProxyModel)
         
@@ -517,6 +518,7 @@ class Civ4Window(QtGui.QMainWindow):
         self.connect(newTab.tagQueryTreeView, QtCore.SIGNAL("viewNodeSource(const QModelIndex&)"), self.displayXmlNodeSource)
         
         newTab.tagQueryTreeView.getContextMenu().addAction(self.tr("View Table Text"), self.displayTableText)
+        newTab.tagQueryTreeView.getContextMenu().addAction(self.tr("View Statistics Text"), self.displayStatsTableText)
     
     def initXmlSourceViewWidget(self, iId = 0):
         if not iId:
@@ -857,6 +859,7 @@ class Civ4Window(QtGui.QMainWindow):
         
         if self.oldTabCount:
             widget = self.initXmlSourceViewWidget()
+            widget.filePath = tab.filePath
             
             widget.setNode(item)
             widget.show()
@@ -871,12 +874,23 @@ class Civ4Window(QtGui.QMainWindow):
         GC.g_temp_widget = self.dictXmlSourceViewWidget.pop(iId)
     
     def displayTableText(self):
-        ## self:action, parent:contextMenu, grandparent:treeView
-        tagQueryTreeView = self.sender().parent().parent()
-        text = tagQueryTreeView.model().toHtml()
+        tab = self.currentTab()
+        text = tab.tagQueryTreeView.model().toHtml()
         
         if self.oldTabCount:
             widget = self.initXmlSourceViewWidget()
+            widget.filePath = tab.filePath
+            
+            widget.setPlainTextToTextEdit(text)
+            widget.show()
+
+    def displayStatsTableText(self):
+        tab = self.currentTab()
+        text = tab.tagQueryTreeView.model().toHtmlStats()
+        
+        if self.oldTabCount:
+            widget = self.initXmlSourceViewWidget()
+            widget.filePath = tab.filePath
             
             widget.setPlainTextToTextEdit(text)
             widget.show()
@@ -884,9 +898,17 @@ class Civ4Window(QtGui.QMainWindow):
     def saveSettings(self):
         tab = self.currentTab()
         
+        ## filter
+        GC.g_settings.beginGroup(GC.INI_GROUP_Filter)
+        
+        GC.g_settings.setValue(GC.INI_filter_deep_key, QtCore.QVariant(GC.INI_filter_deep))
+        
+        GC.g_settings.endGroup()
+        
+        ## display
         GC.g_settings.beginGroup(GC.INI_GROUP_display)
         
-        ## mainWindow
+        #### mainWindow
         GC.g_settings.setValue(GC.INI_display_mainWindow, QtCore.QVariant(self.saveGeometry()))
         
         if self.oldTabCount:
@@ -899,7 +921,7 @@ class Civ4Window(QtGui.QMainWindow):
                 ## update setting-cache GC.g_DICT_settings
                 GC.g_DICT_settings[name] = GC.g_settings.value(name).toByteArray()
         
-            ## filter
+            #### filter
             h1 = tab.leaderTagFilter.isHidden()
             h2 = tab.infoFilter.isHidden()
             h3 = tab.tagQueryFilter.isHidden()
@@ -911,7 +933,7 @@ class Civ4Window(QtGui.QMainWindow):
             GC.INI_display_hide_InfoFilter = h2
             GC.INI_display_hide_TagQueryFilter = h3
             
-            ## expand/collapse
+            #### expand/collapse
             GC.g_settings.setValue(GC.INI_display_expand_InfoTreeView_key, QtCore.QVariant(GC.INI_display_expand_InfoTreeView))
             GC.g_settings.setValue(GC.INI_display_expand_TagQueryTreeView_key, QtCore.QVariant(GC.INI_display_expand_TagQueryTreeView))
 
@@ -939,7 +961,7 @@ class Civ4Window(QtGui.QMainWindow):
                 f.close()
                 
             else:
-                text = u'reame.txt not found'
+                text = self.tr(u'readme.txt not found')
         
             widget = self.initXmlSourceViewWidget(GC.WINDOW_help_contents)
             widget.setHelpContents(text)
@@ -998,6 +1020,13 @@ def loadGlobalSettings():
         
     GC.g_settings.endGroup()
     
+    ## filter
+    GC.g_settings.beginGroup(GC.INI_GROUP_Filter)
+    
+    GC.INI_filter_deep = GC.g_settings.value(GC.INI_filter_deep_key).toBool()
+    
+    GC.g_settings.endGroup()
+    
     ## recent files
     GC.g_settings.beginGroup(GC.INI_GROUP_RecentFiles)
     
@@ -1042,6 +1071,10 @@ def loadDisplaySettings(g_DICT, settings):
     
     
 def main():
+    if GC.VERSION_debug:
+        g_D = gu.DebugLog()
+        g_E = gu.ErrorLog()
+    
     app = QtGui.QApplication(sys.argv)
     
     initGlobals(app, sys.argv)
@@ -1049,6 +1082,10 @@ def main():
     mywindow = Civ4Window()
     mywindow.show()
     app.exec_()
+    
+    if GC.VERSION_debug:
+        g_D.close()
+        g_E.close()
 
 if __name__=='__main__':
     main()

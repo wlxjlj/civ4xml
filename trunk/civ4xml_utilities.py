@@ -133,3 +133,12 @@ def searchXmlDir(fileName, dirInfo, bFirst):
                     
     return result
     
+def cmpTagValue(v1, v2):
+    ## v1, v2 QString
+    i, bi = v1.toInt()
+    j, bj = v2.toInt()
+    
+    if bi and bj:
+        return cmp(abs(i),abs(j))
+    else:
+        return cmp(v1, v2)

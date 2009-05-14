@@ -7,7 +7,7 @@ import py2exe
 
 main = 'civ4xml_GUI.pyw'
 
-Mydata_files = [('.', ['Civ4XML_default_settings.ini', 'Civ4XML_settings.ini', 'gpl-3.0.txt', 'readme.txt'])]
+Mydata_files = [('.', ['Civ4XML_default_settings.ini', 'Civ4XML_settings.ini', 'gpl-3.0.txt', 'readme.txt', 'changelog.txt'])]
 
 setup(
     windows = [main],
