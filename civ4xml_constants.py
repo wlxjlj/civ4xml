@@ -68,6 +68,9 @@ class GC(object):
     INI_GROUP_Path = u'Path'
     INI_path_startup_key = u'startup'
     
+    INI_GROUP_Filter = u'Filter'
+    INI_filter_deep_key = u'deep'
+    
     INI_GROUP_RecentFiles = u'RecentFiles'
     INI_recent_files_sizename = u'size'
     INI_recent_files_key = u'recentFiles'
@@ -87,6 +90,8 @@ class GC(object):
     HELP_FileName = u'readme.txt'
 
     ## global variable, overrided by settings
+    INI_filter_deep =False
+    
     INI_recent_files_size = 6
     
     INI_display_hide_LeaderTagFilter = False
@@ -127,6 +132,7 @@ class GC(object):
     WINDOW_help_contents = -123
     
     ## version
+    VERSION_debug = False
     VERSION_schema = 0
     VERSION_civ4xml = u'0.1'
     

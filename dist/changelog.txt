@@ -1,0 +1,6 @@
+Version 0.1.0.1 (5/14/2009)
+- changed the filter mechanics
+- fixed saveAs issue with view-source window
+
+Version 0.1 (5/13/2009)
+- first release, w/o readme.txt

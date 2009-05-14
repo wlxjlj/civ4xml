@@ -220,8 +220,13 @@ class Civ4XmlSourceViewWidget(QtGui.QMainWindow):
         self.iId = iId
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         
+        ## menu
         self.menuFile = self.menuBar().addMenu(self.tr("&File")) 
         self.actionSaveAs = self.menuFile.addAction(self.tr("Save as..."), self.saveAs)
+        
+        self.menuView = self.menuBar().addMenu(self.tr("&View")) 
+        self.actionSwitchFormat = self.menuView.addAction(self.tr("RichText"), self.switchFormat)
+        self.actionSwitchFormat.setCheckable(True)
         
         self.toolBarFile = QtGui.QToolBar(self)
         self.toolBarFile.setWindowTitle(self.tr("File"))
@@ -245,6 +250,8 @@ class Civ4XmlSourceViewWidget(QtGui.QMainWindow):
         text = QtCore.QString()
         out = QtCore.QTextStream(text)
         node.save(out, 4) 
+        
+        self.contents = text
         self.sourceTextEdit.setPlainText(text)
         
         if node.isDocument():
@@ -253,10 +260,13 @@ class Civ4XmlSourceViewWidget(QtGui.QMainWindow):
             self.setWindowTitle(node.nodeName())
     
     def setPlainTextToTextEdit(self, text):
+        self.contents = text
         self.setWindowTitle(self.tr("Query Result"))
         self.sourceTextEdit.setPlainText(text)
     
     def setHelpContents(self, text):
+        self.filePath = GC.g_appName
+        self.contents = text
         self.setWindowTitle(self.tr("Help"))
         
         self.sourceTextEdit.setReadOnly(True)
@@ -281,9 +291,15 @@ class Civ4XmlSourceViewWidget(QtGui.QMainWindow):
                 return
             
             out = QtCore.QTextStream(saveFile)
-            document.save(out, 4)
+            out << self.contents
             out.flush()
             saveFile.close()
+    
+    def switchFormat(self):
+        if self.actionSwitchFormat.isChecked():
+            self.sourceTextEdit.setText(self.contents)
+        else:
+            self.sourceTextEdit.setPlainText(self.contents)
     
 class Civ4XmlMessageBox(QtGui.QMessageBox):
     def __init__(self, parent = None):
