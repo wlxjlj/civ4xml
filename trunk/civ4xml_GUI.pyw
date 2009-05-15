@@ -638,7 +638,12 @@ class Civ4Window(QtGui.QMainWindow):
     ## SLOTs
     def openFile(self,  filePath = None):
         if not filePath:
-            filePath = QtGui.QFileDialog.getOpenFileName(self, QtCore.QString(), self.xmlPath, self.tr("XML files (*.xml);;All files (*.*)"))
+            if self.oldTabCount:
+                dir = self.currentTab().filePath
+            else:
+                dir = self.xmlPath
+
+            filePath = QtGui.QFileDialog.getOpenFileName(self, QtCore.QString(), dir, self.tr("XML files (*.xml);;All files (*.*)"))
 
         if filePath:
             newTab = Civ4XmlWidget(self, filePath)
@@ -678,9 +683,14 @@ class Civ4Window(QtGui.QMainWindow):
                     result = self.saveAs(True)
                     if result != 1:
                         return
-                            
+
         if not filePath:
-            filePath = QtGui.QFileDialog.getOpenFileName(self, self.tr("Load"), self.xmlPath, self.tr("XML files (*.xml);;All files (*.*)"))
+            if self.oldTabCount:
+                dir = self.currentTab().filePath
+            else:
+                dir = self.xmlPath
+
+            filePath = QtGui.QFileDialog.getOpenFileName(self, self.tr("Load"), dir, self.tr("XML files (*.xml);;All files (*.*)"))
 
         if filePath:
             if not self.oldTabCount:

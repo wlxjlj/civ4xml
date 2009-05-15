@@ -132,9 +132,9 @@ class GC(object):
     WINDOW_help_contents = -123
     
     ## version
-    VERSION_debug = False
+    VERSION_debug = True
     VERSION_schema = 0
-    VERSION_civ4xml = u'0.1'
+    VERSION_civ4xml = '0.1.0.2'
     
     ## text
     TEXT_license = u'''This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
