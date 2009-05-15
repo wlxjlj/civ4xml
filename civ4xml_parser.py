@@ -1109,7 +1109,7 @@ class Civ4SortFilterProxyModel(QtGui.QSortFilterProxyModel):
         leaderTagColumn = GC.TAGQUERY_ColumnNumber_leaderTag
         valueColumn = GC.TAGQUERY_ColumnNumber_value
 
-        TableItem = QtCore.QString(u'<td> %1 <td>')
+        TableItem = QtCore.QString(u'<td> %1 </td>')
         line1 = QtCore.QStringList()
         line2 = QtCore.QStringList()
         
@@ -1143,8 +1143,8 @@ class Civ4SortFilterProxyModel(QtGui.QSortFilterProxyModel):
         leaderTagColumn = GC.TAGQUERY_ColumnNumber_leaderTag
         valueColumn = GC.TAGQUERY_ColumnNumber_value
         
-        #TableItem = QtCore.QString(u'<td> %1 <td>')
-        TableRow = QtCore.QString(u'<tr><td> %1 <td><td> %2 <td><tr>')
+        #TableItem = QtCore.QString(u'<td> %1 </td>')
+        TableRow = QtCore.QString(u'<tr><td> %1 </td><td> %2 </td></tr>')
         statsDict = {}
         
         for i in range(self.rowCount(rootIndex)):

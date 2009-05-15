@@ -1,3 +1,6 @@
+- fix a bug with view-source text
+- changed open/load dir
+
 Version 0.1.0.1 (5/14/2009)
 - changed the filter mechanics
 - fixed saveAs issue with view-source window
