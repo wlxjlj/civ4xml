@@ -301,6 +301,8 @@ class Civ4Window(QtGui.QMainWindow):
         
         self.connect(self.tabBar, QtCore.SIGNAL("doubleClicked(const int&)"), self.closeFile)
         
+        self.setAcceptDrops(True) 
+        
         self.init()
 
     def setupUi(self):
@@ -634,7 +636,26 @@ class Civ4Window(QtGui.QMainWindow):
         self.dictXmlSourceViewWidget.clear()
 
         QtGui.QMainWindow.closeEvent(self, event)
-            
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat("text/uri-list"):
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event): 
+        urlList = event.mimeData().urls()
+        
+        if urlList:
+            for url in urlList:
+                fileName = url.toLocalFile()
+                
+                if fileName:
+                    fileInfo = QtCore.QFileInfo(fileName)
+                    
+                    if fileInfo.suffix() == 'xml':
+                        self.openFile(fileName)
+
     ## SLOTs
     def openFile(self,  filePath = None):
         if not filePath:
@@ -857,17 +878,17 @@ class Civ4Window(QtGui.QMainWindow):
         GC.INI_display_stop_TagQueryModel = self.actionSwtichTagQuery.isChecked()
     
     def displayXmlNodeSource(self, index = None):
-        tab = self.currentTab()
-        
-        if index:
-            if self.sender() == tab.leaderTagTreeView:
-                item = tab.branchList[index.row()]
-            else:
-                item = index.internalPointer()
-        else:            
-            item = tab.domDocument
-        
         if self.oldTabCount:
+            tab = self.currentTab()
+        
+            if index:
+                if self.sender() == tab.leaderTagTreeView:
+                    item = tab.branchList[index.row()]
+                else:
+                    item = index.internalPointer()
+            else:            
+                item = tab.domDocument
+        
             widget = self.initXmlSourceViewWidget()
             widget.filePath = tab.filePath
             
