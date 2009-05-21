@@ -1,4 +1,6 @@
-- fix a bug with view-source text
+- added drag and drop event for opening files to the main window
+- fixed a bug with view-source window
+- fixed a bug with view-source text
 - changed open/load dir
 
 Version 0.1.0.1 (5/14/2009)

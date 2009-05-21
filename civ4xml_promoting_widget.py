@@ -45,7 +45,7 @@ class Civ4TreeView(QtGui.QTreeView):
         QtGui.QTreeView.__init__(self, parent)
         
         self.contextMenu = QtGui.QMenu(self)
-        self.actionViewNodeSource = self.contextMenu.addAction(self.tr("View Source"), self.sendViewNodeSourceSignal)
+        self.actionViewNodeSource = self.contextMenu.addAction(self.tr("View Node Source"), self.sendViewNodeSourceSignal)
         
         #self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
     
