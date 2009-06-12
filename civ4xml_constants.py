@@ -59,6 +59,10 @@ class GC(object):
     ## dir
     Dir_Xml = u'/Assets/XML'
     
+    ## filename
+    FileName_readme = u'readme.txt'
+    FileName_bookmarks = u'bookmarks.xml'
+    
     ## settings
     INI_FileBaseName = u'Civ4XML_settings'
     INI_FileName = u'Civ4XML_settings.ini'
@@ -67,6 +71,7 @@ class GC(object):
     
     INI_GROUP_Path = u'Path'
     INI_path_startup_key = u'startup'
+    INI_path_dirTreeView_root_key = u'dirRoot'
     
     INI_GROUP_Filter = u'Filter'
     INI_filter_deep_key = u'deep'
@@ -77,6 +82,10 @@ class GC(object):
 
     INI_GROUP_display = u'Display'
     INI_display_mainWindow = u'mainWindow'
+    INI_display_mainWindow_dockwidget = u'dockwidget'
+    INI_display_dirTreeView = u'dirTreeView'
+    INI_display_bookmarksTreeView = u'bookmarksTreeView'
+    
     INI_display_TUPLE_CustomWidgetName = (u'splitter', u'splitterL', u'splitterR', u'headerLeaderTag', u'headerInfo', u'headerTagQuery')
 
     INI_display_hide_LeaderTagFilter_key = u'leaderTagFilter'
@@ -86,8 +95,8 @@ class GC(object):
     INI_display_expand_InfoTreeView_key = u'expandInfoTreeView'
     INI_display_expand_TagQueryTreeView_key = u'expandTagQueryTreeView'
     
-    ## help
-    HELP_FileName = u'readme.txt'
+    INI_GROUP_Dir = u'dir'
+    
 
     ## global variable, overrided by settings
     INI_filter_deep =False
@@ -102,6 +111,8 @@ class GC(object):
     INI_display_expand_TagQueryTreeView = True
     
     INI_display_stop_TagQueryModel = False
+    
+    INI_path_dirTreeView_root = u"c:/program files/Firaxis Games/Sid Meier's Civilization 4/"
 
     INI_shortcutKey_expand_InfoTreeView = u'Shift+1'
     INI_shortcutKey_collapse_InfoTreeView = u'Shift+2'
@@ -111,6 +122,7 @@ class GC(object):
     INI_shortcutKey_switch_InfoFilter = u'Alt+2'
     INI_shortcutKey_switch_TagQueryFilter = u'Alt+3'
     INI_shortcutKey_view_XmlSource = u'Ctrl+U'
+    INI_shortcutKey_view_FullScreen = u'F11'
     
     ## global variable, dynamic
     #g_temp_widget
@@ -120,7 +132,8 @@ class GC(object):
     #g_DICT_settings
     #g_DICT_default_settings
     
-    #g_appInfo, g_appDir, g_appDirName, g_appName, g_iniFileInfo
+    #g_appInfo, g_appDir, g_appDirName, g_appName
+    #g_iniFileInfo, g_readmeFileInfo, g_bookmarksFileInfo
     
     #g_XmlDir_Vanilla, g_XmlDir_Wl, g_XmlDir_BtS
     
@@ -132,9 +145,10 @@ class GC(object):
     WINDOW_help_contents = -123
     
     ## version
-    VERSION_debug = True
+    VERSION_debug = False
     VERSION_schema = 0
-    VERSION_civ4xml = '0.1.0.2'
+    VERSION_mainwindow_dockwidget = 1
+    VERSION_civ4xml = '0.1.2alpha'
     
     ## text
     TEXT_license = u'''This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.

@@ -1,3 +1,14 @@
+Version 0.1.2alpha (6/12/2009)
+- added ini/key dirRoot, represents the root of directory window's dir model
+- added file/bookmarks.xml
+- added bookmarks window, subclass Civ4BookmarksTreeView, Civ4BookmarksModel
+- changed SLOT openFile in mainwindow, so that it can be used to open all xml files in a directory
+
+Version 0.1.0.2 (5/27/2009)
+- changed receiver of drag and drop event for opening files from mainwindow to tabwidget
+- added subclass Civ4XmlTabWidget, changed the class of tabwidget
+- added directory window, subclass Civ4DirTreeView
+- fixed a bug with first tab created by load-file action
 - added drag and drop event for opening files to the main window
 - fixed a bug with view-source window
 - fixed a bug with view-source text

@@ -6,6 +6,7 @@ import sys
 from PyQt4 import QtCore, QtGui
 
 from civ4xml_constants import GC
+from civ4xml_parser import *
 
 class Civ4LineEdit(QtGui.QLineEdit):
     def __init__(self,  parent = None):
@@ -39,6 +40,13 @@ class Civ4ItemDelegate(QtGui.QStyledItemDelegate):
         editor = self.sender()
         self.emit(QtCore.SIGNAL("commitData(QWidget *)"), editor)
         self.emit(QtCore.SIGNAL("closeEditor(QWidget *)"), editor) 
+
+class Civ4NoProxyItemDelegate(Civ4ItemDelegate):
+    def __init__(self,  parent = None):
+        Civ4ItemDelegate.__init__(self,  parent)
+    
+    def setModelData(self, editor, model, index): 
+        model.setData(index,  QtCore.QVariant(editor.text()))
     
 class Civ4TreeView(QtGui.QTreeView):
     def __init__(self, parent = None):
@@ -46,14 +54,15 @@ class Civ4TreeView(QtGui.QTreeView):
         
         self.contextMenu = QtGui.QMenu(self)
         self.actionViewNodeSource = self.contextMenu.addAction(self.tr("View Node Source"), self.sendViewNodeSourceSignal)
-        
-        #self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
     
     def getContextMenu(self):
         return self.contextMenu
     
     ## virtual protected
     def contextMenuEvent(self, event):
+        #index = self.indexAt(event.pos())
+        #self.setCurrentIndex(index)
+        
         self.contextMenu.exec_(event.globalPos()) 
 
     ## SLOT
@@ -213,6 +222,34 @@ class Civ4XmlBaseWidget(QtGui.QWidget):
         self.splitterR.addWidget(self.infoBundle)
         self.splitterR.addWidget(self.tagQueryBundle)
 
+class Civ4XmlTabWidget(QtGui.QTabWidget):
+    def __init__(self, parent = None):
+        QtGui.QTabWidget.__init__(self, parent)
+        
+        self.civ4TabBar = Civ4TabBar(self)
+        self.setTabBar(self.civ4TabBar)
+        
+        self.setAcceptDrops(True) 
+    
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat("text/uri-list"):
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event): 
+        urlList = event.mimeData().urls()
+        
+        if urlList:
+            for url in urlList:
+                filePath = url.toLocalFile()
+                
+                if filePath:
+                    fileInfo = QtCore.QFileInfo(filePath)
+                    
+                    if fileInfo.isFile() and fileInfo.suffix() == 'xml' or fileInfo.isDir():
+                        self.emit(QtCore.SIGNAL("openFileFromTabWidgetDropEvent(const QString &)"), filePath)
+
 class Civ4XmlSourceViewWidget(QtGui.QMainWindow):
     def __init__(self, parent = None, iId = 0):
         QtGui.QMainWindow.__init__(self, parent)
@@ -300,7 +337,7 @@ class Civ4XmlSourceViewWidget(QtGui.QMainWindow):
             self.sourceTextEdit.setText(self.contents)
         else:
             self.sourceTextEdit.setPlainText(self.contents)
-    
+
 class Civ4XmlMessageBox(QtGui.QMessageBox):
     def __init__(self, parent = None):
         QtGui.QMessageBox.__init__(self, parent)
@@ -335,3 +372,187 @@ class Civ4XmlMessageBox(QtGui.QMessageBox):
         textList.append(self.tr(GC.TEXT_license))
         
         return title, textList.join(u'<br>')
+
+class Civ4DirTreeView(QtGui.QTreeView):
+    def __init__(self, parent = None):
+        QtGui.QTreeView.__init__(self, parent)
+        
+        self.openFilePath = u''
+        
+        self.setDragEnabled(True)
+        
+        nameFilters = QtCore.QStringList()
+        filters = QtCore.QDir.AllEntries | QtCore.QDir.NoDotAndDotDot
+        sortFlags = QtCore.QDir.DirsFirst | QtCore.QDir.Type
+        self.dirModel = QtGui.QDirModel(nameFilters, filters, sortFlags, self)
+        #self.dirModel = Civ4DirModel(nameFilters, filters, sortFlags, self)
+        self.setModel(self.dirModel)
+    
+        self.contextMenu = QtGui.QMenu(self)
+        self.actionOpen = self.contextMenu.addAction(self.tr("Open"), self.open)
+        
+        self.connect(self, QtCore.SIGNAL("doubleClicked (const QModelIndex&)"), self.load)
+        #self.connect(self, QtCore.SIGNAL("clicked (const QModelIndex&)"), self.load)
+    
+    def getContextMenu(self):
+        return self.contextMenu
+    
+    ## virtual protected
+    def contextMenuEvent(self, event):
+        index = self.indexAt(event.pos())
+        self.setCurrentIndex(index)
+        
+        if index.isValid():
+            fileInfo = self.model().fileInfo(index)
+            if fileInfo.isFile() and fileInfo.suffix() == 'xml' or fileInfo.isDir():
+                self.openFilePath = self.model().filePath(index)
+                self.actionOpen.setText(self.tr('Open %1').arg(self.openFilePath))
+                self.contextMenu.exec_(event.globalPos()) 
+
+    ## SLOT
+    def open(self):
+        index = self.currentIndex()
+        
+        if index.isValid():
+            fileInfo = self.model().fileInfo(index)
+            if fileInfo.isFile() and fileInfo.suffix() == 'xml' or fileInfo.isDir():
+                self.openFilePath = self.model().filePath(index)
+                self.emit(QtCore.SIGNAL("openFileFromDirTreeView(const QString &)"), self.openFilePath)
+
+    def load(self):
+        index = self.currentIndex()
+        
+        if index.isValid():
+            fileInfo = self.model().fileInfo(index)
+            if fileInfo.isFile() and fileInfo.suffix() == 'xml':
+                self.openFilePath = self.model().filePath(index)
+                self.emit(QtCore.SIGNAL("loadFileFromDirTreeView(const QString &)"), self.openFilePath)
+            elif  fileInfo.isDir():
+                self.openFilePath = self.model().filePath(index)
+                self.emit(QtCore.SIGNAL("openFileFromDirTreeView(const QString &)"), self.openFilePath)
+
+class Civ4BookmarksTreeView(QtGui.QTreeView):
+    def __init__(self, parent = None):
+        QtGui.QTreeView.__init__(self, parent)
+        
+        self.openFilePath = u''
+
+        self.bookmarksItemDelegate = Civ4NoProxyItemDelegate(self)
+        self.setItemDelegate(self.bookmarksItemDelegate)
+        
+        self.setEditTriggers(QtGui.QAbstractItemView.EditKeyPressed)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+        
+        self.bookmarksModel = Civ4BookmarksModel(self)
+        self.setModel(self.bookmarksModel)
+
+        self.contextMenu = QtGui.QMenu(self)
+        self.actionOpen = self.contextMenu.addAction(self.tr("Open"), self.open)
+        self.actionAddFolder = self.contextMenu.addAction(self.tr("Add Folder"), self.addFolder)
+        self.actionTriggerEditor = self.contextMenu.addAction(self.tr("Edit"), self.triggerEditor)
+        self.actionRemove = self.contextMenu.addAction(self.tr("Remove"), self.remove)
+        
+        self.connect(self, QtCore.SIGNAL("doubleClicked (const QModelIndex&)"), self.load)
+        #self.connect(self, QtCore.SIGNAL("clicked (const QModelIndex&)"), self.load)
+    
+    def getContextMenu(self):
+        return self.contextMenu
+    
+    ## virtual protected
+    def contextMenuEvent(self, event):
+        bValid = False
+        bFolder = False
+        self.actionOpen.setVisible(False)
+        self.actionAddFolder.setVisible(False)
+        self.actionTriggerEditor.setVisible(False)
+        self.actionRemove.setVisible(False)
+        
+        index = self.indexAt(event.pos())
+        self.setCurrentIndex(index)
+        
+        if index.isValid():
+            item = index.internalPointer()
+            fileInfo = QtCore.QFileInfo(item.getPath())
+            
+            if fileInfo.isFile() and fileInfo.suffix() == 'xml' or fileInfo.isDir():
+                self.openFilePath = fileInfo.absoluteFilePath()
+                self.actionOpen.setText(self.tr('Open %1').arg(self.openFilePath))
+                self.actionOpen.setVisible(True)
+                bValid = True
+            
+            if item.isFolder():
+                bFolder = True
+                if index.column() == 0:
+                    self.actionTriggerEditor.setVisible(True)
+                    bValid = True
+            elif item.isFile() or item.isDir():
+                if index.column() == 0 or index.column() == 1:
+                    self.actionTriggerEditor.setVisible(True)
+                    bValid = True
+            
+            if item.isBookmark():
+                self.actionRemove.setVisible(True)
+                self.actionRemove.setText(self.tr('Remove %1').arg(item.getName()))
+                bValid = True
+        
+        else:
+            bFolder = True
+        
+        if bFolder:
+            bValid = True
+            self.actionAddFolder.setVisible(True)
+        
+        if bValid:
+            self.contextMenu.exec_(event.globalPos()) 
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat("application/x-bookmarksdatalist") or event.mimeData().hasFormat("text/uri-list"):
+            event.accept()
+            self.setState(QtGui.QAbstractItemView.DraggingState)
+        else:
+            event.ignore()
+
+    ## SLOT
+    def open(self):
+        index = self.currentIndex()
+        
+        if index.isValid():
+            item = index.internalPointer()
+            fileInfo = QtCore.QFileInfo(item.getPath())
+            
+            if fileInfo.isFile() and fileInfo.suffix() == 'xml':
+                self.openFilePath = fileInfo.absoluteFilePath()
+                self.emit(QtCore.SIGNAL("openFileFromBookmarksTreeView(const QString &, bool)"), self.openFilePath, False)
+            elif fileInfo.isDir() and item.isDir():
+                self.openFilePath = fileInfo.absoluteFilePath()
+                self.emit(QtCore.SIGNAL("openFileFromBookmarksTreeView(const QString &, bool)"), self.openFilePath, True)
+
+    def load(self):
+        index = self.currentIndex()
+        
+        if index.isValid():
+            item = index.internalPointer()
+            fileInfo = QtCore.QFileInfo(item.getPath())
+            
+            if fileInfo.isFile() and fileInfo.suffix() == 'xml':
+                self.openFilePath = fileInfo.absoluteFilePath()
+                self.emit(QtCore.SIGNAL("loadFileFromBookmarksTreeView(const QString &)"), self.openFilePath)
+            elif  fileInfo.isDir() and item.isDir():
+                self.openFilePath = fileInfo.absoluteFilePath()
+                self.emit(QtCore.SIGNAL("openFileFromBookmarksTreeView(const QString &, bool)"), self.openFilePath, True)
+    
+    def addFolder(self):
+        row = -1
+        parent = self.currentIndex()
+        bookmarkNode = self.model().getNode(u'new folder', u'', u'folder')
+        
+        self.model().insertBookmark(row,  parent,  bookmarkNode)
+    
+    def triggerEditor(self):
+        self.edit(self.currentIndex())
+    
+    def remove(self):
+        self.model().removeBookmark(self.currentIndex())
+        self.reset()

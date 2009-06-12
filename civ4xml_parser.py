@@ -24,7 +24,11 @@ class Civ4Xml(QtXml.QDomDocument):
             self.bXmlFail = True
             return
         else:
-            self.bXmlFail = False
+            if self.documentElement().childNodes().count() == 0:
+                self.bXmlFail = True
+                return
+            else:
+                self.bXmlFail = False
         
         self.root = self.documentElement()
         self.filePath = filePath
@@ -633,7 +637,7 @@ class Civ4LeaderTagModel(QtCore.QAbstractItemModel):
     def getLeaderTagIndex(self,  rowNumber, columnNumber = 0):
         return self.index(rowNumber, columnNumber, QtCore.QModelIndex())
 
-    def columnCount(self, parent):
+    def columnCount(self, parent = QtCore.QModelIndex()):
         return 3
 
     def data(self, index, role = QtCore.Qt.DisplayRole):
@@ -668,7 +672,7 @@ class Civ4LeaderTagModel(QtCore.QAbstractItemModel):
                 
         return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
 
-    def headerData(self, section, orientation, role):
+    def headerData(self, section, orientation, role = QtCore.Qt.DisplayRole):
         if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
             if section == 0:
                 if self.flag != GC.LEADERTAG_FLAG_Different and self.flag != GC.LEADERTAG_FLAG_Repeated:
@@ -685,7 +689,7 @@ class Civ4LeaderTagModel(QtCore.QAbstractItemModel):
 
         return QtCore.QVariant()
 
-    def index(self, row, column, parent):
+    def index(self, row, column, parent = QtCore.QModelIndex()):
         if row < 0 or column < 0 or row >= self.rowCount(parent) or column >= self.columnCount(parent):
             return QtCore.QModelIndex()
 
@@ -697,7 +701,7 @@ class Civ4LeaderTagModel(QtCore.QAbstractItemModel):
     def parent(self, child):
         return QtCore.QModelIndex()
 
-    def rowCount(self, parent):
+    def rowCount(self, parent = QtCore.QModelIndex()):
         if not parent.isValid():
             return len(self.leaderTagList)
         else:
@@ -732,7 +736,7 @@ class Civ4DomModel(QtCore.QAbstractItemModel):
         else:
             return None
 
-    def columnCount(self, parent):
+    def columnCount(self, parent = QtCore.QModelIndex()):
         return 4
 
     def data(self, index, role = QtCore.Qt.DisplayRole):
@@ -786,7 +790,7 @@ class Civ4DomModel(QtCore.QAbstractItemModel):
 
         return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
     
-    def headerData(self, section, orientation, role):
+    def headerData(self, section, orientation, role = QtCore.Qt.DisplayRole):
         if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
             if section == 0:
                 return QtCore.QVariant(self.tr("Name"))
@@ -801,7 +805,7 @@ class Civ4DomModel(QtCore.QAbstractItemModel):
 
         return QtCore.QVariant()
 
-    def index(self, row, column, parent):
+    def index(self, row, column, parent = QtCore.QModelIndex()):
         if row < 0 or column < 0 or row >= self.rowCount(parent) or column >= self.columnCount(parent):
             return QtCore.QModelIndex()
 
@@ -829,7 +833,7 @@ class Civ4DomModel(QtCore.QAbstractItemModel):
 
         return self.createIndex(parentItem.row(), 0, parentItem)
 
-    def rowCount(self, parent):
+    def rowCount(self, parent = QtCore.QModelIndex()):
         if parent.column() > 0:
             return 0
 
@@ -879,7 +883,7 @@ class Civ4TagQueryModel(QtCore.QAbstractItemModel):
             
         return item
         
-    def columnCount(self, parent):
+    def columnCount(self, parent = QtCore.QModelIndex()):
         if not parent.isValid():
             return 4
         
@@ -968,7 +972,7 @@ class Civ4TagQueryModel(QtCore.QAbstractItemModel):
 
         return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
 
-    def headerData(self, section, orientation, role):
+    def headerData(self, section, orientation, role = QtCore.Qt.DisplayRole):
         if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
             if section == 0:
                 return QtCore.QVariant(self.tr("Tag"))
@@ -987,7 +991,7 @@ class Civ4TagQueryModel(QtCore.QAbstractItemModel):
 
         return QtCore.QVariant()
 
-    def index(self, row, column, parent):
+    def index(self, row, column, parent = QtCore.QModelIndex()):
         if row < 0 or column < 0 or row >= self.rowCount(parent) or column >= self.columnCount(parent):
             return QtCore.QModelIndex()
 
@@ -1023,7 +1027,7 @@ class Civ4TagQueryModel(QtCore.QAbstractItemModel):
         else:
             return self.createIndex(parentItem.row(), 0, parentItem)
     
-    def rowCount(self, parent):
+    def rowCount(self, parent = QtCore.QModelIndex()):
         if not parent.isValid():
             return len(self.tagList)
         else:
@@ -1170,3 +1174,420 @@ class Civ4SortFilterProxyModel(QtGui.QSortFilterProxyModel):
         output.append(u'</table>')
         
         return output.join(u'\n')
+
+class Civ4DirModel(QtGui.QDirModel):
+    def __init__(self, nameFilters = QtCore.QStringList(), filters = QtCore.QDir.Filters(), sort = QtCore.QDir.SortFlags(), parent = None):
+        QtGui.QDirModel.__init__(self, nameFilters, filters, sort, parent)
+
+class Civ4BookmarksItem(QtXml.QDomNode):
+    def __init__(self, node,  parentItem = None):
+        QtXml.QDomNode.__init__(self, node)
+        
+        self.domNode = node
+        self.parentItem = parentItem
+        
+        self.init()
+    
+    def init(self):
+        self.childItems = []
+        children = self.childNodes()
+        
+        for i in range(children.count()):
+            child = children.item(i)
+            childItem = Civ4BookmarksItem(child, self)
+            
+            if childItem.isBookmark():
+                self.childItems.append(childItem)
+        
+    def node(self):
+        return self.domNode
+    
+    def parentItemBookmark(self):
+        return self.parentItem
+    
+    def childItemBookmarks(self):
+        return self.childItems
+    
+    def rowNumber(self):
+        parentNode = self.node().parentNode()
+        
+        if parentNode.isNull():
+            return -1
+        else:
+            i = 0
+            child = parentNode.firstChild()
+            
+            while True:
+                if child == self.domNode:
+                    return i
+                
+                i += 1
+                child = child.nextSibling()
+
+    def isFolder(self):
+        if self.nodeName() == u'folder':
+            return True
+        else:
+            return False
+
+    def isFile(self):
+        if self.nodeName() == u'file':
+            return True
+        else:
+            return False
+
+    def isDir(self):
+        if self.nodeName() == u'dir':
+            return True
+        else:
+            return False
+    
+    def isBookmark(self):
+        return self.isFile() or self.isDir() or self.isFolder()
+    
+    def getName(self):
+        return self.firstChildElement(u'name').firstChild().nodeValue()
+        
+    def getPath(self):
+        if self.isFile() or self.isDir():
+            return self.firstChildElement(u'path').firstChild().nodeValue()
+        else:
+            return QtCore.QString()
+    
+    def getComments(self):
+        if self.isFolder():
+            return QtCore.QString(u'folder')
+        elif self.isFile():
+            return QtCore.QString(u'file')
+        elif self.isDir():
+            return QtCore.QString(u'dir')
+        
+        return QtCore.QString()
+    
+    def setName(self,  text):
+        target = self.firstChildElement(u'name')
+        
+        if target.hasChildNodes():
+            target.firstChild().setNodeValue(text)
+            
+        elif text:
+            textNode = target.ownerDocument().createTextNode(text)
+            target.appendChild(textNode)
+
+    def setPath(self,  text):
+        target = self.firstChildElement(u'path')
+        
+        if target.hasChildNodes():
+            if text:
+                target.firstChild().setNodeValue(text)
+            
+        elif text:
+            textNode = target.ownerDocument().createTextNode(text)
+            target.appendChild(textNode)
+
+class Civ4BookmarksModel(QtCore.QAbstractItemModel):
+    def __init__(self, parent = None):
+        QtCore.QAbstractItemModel.__init__(self, parent)
+        
+        self.filePath = GC.g_bookmarksFileInfo.absoluteFilePath()
+        self.bModified = False
+        self.iconProvider = QtGui.QFileIconProvider()
+        
+        self.loadXml()
+        self.testBookmarks()
+ 
+    def loadXml(self):
+        self.domDocument = QtXml.QDomDocument()
+        
+        f = QtCore.QFile(self.filePath)
+        message = [False]
+        if f.open(QtCore.QIODevice.ReadOnly | QtCore.QIODevice.Text):
+            message = self.domDocument.setContent(f)
+        f.close()
+        
+        if not message[0] or self.domDocument.isNull():
+            self.bXmlFail = True
+        else:
+            self.bXmlFail = False
+            
+        self.rootItem = Civ4BookmarksItem(self.domDocument.documentElement())
+
+    def testBookmarks(self):
+        if not self.rootItem.childItemBookmarks():
+            for dirPath in [GC.g_XmlDir_Vanilla, GC.g_XmlDir_Wl, GC.g_XmlDir_BtS]:
+                if dirPath:
+                    self.insertBookmark(-1, QtCore.QModelIndex(), self.getNodeFromPath(dirPath))
+
+    def isModified(self):
+        return self.bModified
+
+    def getRootItem(self):
+        return self.rootItem
+
+    def getNode(self, name, path, comments):
+        bookmark = self.domDocument.createElement(comments)
+        nameNode = self.domDocument.createElement(u'name')
+        nameTextNode = self.domDocument.createTextNode(name)
+        nameNode.appendChild(nameTextNode)
+        bookmark.appendChild(nameNode)
+        
+        if comments == u'file' or comments == u'dir':
+            pathNode = self.domDocument.createElement(u'path')
+            pathTextNode = self.domDocument.createTextNode(path)
+            pathNode.appendChild(pathTextNode)
+            bookmark.appendChild(pathNode)
+        
+        return bookmark
+    
+    def getNodeFromPath(self,  filePath):
+        fileInfo = QtCore.QFileInfo(filePath)
+        if fileInfo.isDir():
+            comments = u'dir'
+        else:
+            comments = u'file'
+
+        return self.getNode(fileInfo.fileName(), fileInfo.absoluteFilePath(), comments)
+
+    def insertBookmark(self, row, parent, bookmarkNode):
+        if row == -1:
+            first = self.rowCount(parent)
+        else:
+            first = row
+        
+        if parent.isValid():
+            parentItem = parent.internalPointer()
+        else:
+            parentItem = self.rootItem
+
+        bookmarkItem = Civ4BookmarksItem(bookmarkNode, parentItem)        
+
+        self.beginInsertRows(parent, first, first)
+        
+        if row == -1:
+            parentItem.node().appendChild(bookmarkNode)
+        elif row == 0:
+            refChild = parentItem.childItemBookmarks()[0].node()
+            parentItem.node().insertBefore(bookmarkNode, refChild)
+        else:
+            refChild = parentItem.childItemBookmarks()[row -1].node()
+            parentItem.node().insertAfter(bookmarkNode, refChild)
+        
+        parentItem.childItemBookmarks().insert(first, bookmarkItem)
+        self.bModified = True
+
+        self.endInsertRows()
+    
+    def removeBookmark(self, index):
+        if not index.isValid():
+            return
+        
+        parent = self.parent(index)
+        row = index.row()
+        item = index.internalPointer()
+        if parent.isValid():
+            parentItem = parent.internalPointer()
+        else:
+            parentItem = self.rootItem
+        
+        self.beginRemoveRows(parent, row, row) 
+        parentItem.node().removeChild(item.node())
+        del parentItem.childItemBookmarks()[row]
+        self.bModified = True
+        self.endRemoveRows() 
+
+    def save(self):
+        if not self.bModified:
+            return
+
+        saveFile = QtCore.QFile(self.filePath)
+                
+        if not saveFile.open(QtCore.QIODevice.WriteOnly | QtCore.QIODevice.Text):
+            QtGui.QMessageBox.warning(self, self.tr("Codecs"), self.tr("Cannot write file %1:\n%2").arg(self.filePath).arg(saveFile.errorString()))
+            return
+
+        out = QtCore.QTextStream(saveFile)
+        self.domDocument.save(out, 4)
+        out.flush()
+        saveFile.close()
+
+    def flags(self, index):
+        if not index.isValid():
+            return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsDropEnabled
+        
+        defaultFlags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsDragEnabled
+        flags = QtCore.Qt.NoItemFlags
+        
+        item = index.internalPointer()
+
+        if index.column() == 0:
+            flags |= QtCore.Qt.ItemIsEditable
+            if item.isFolder():
+                flags |= QtCore.Qt.ItemIsDropEnabled
+        elif index.column() == 1:
+            if item.isFile() or item.isDir():
+                flags |= QtCore.Qt.ItemIsEditable
+
+        return defaultFlags | flags
+
+    def columnCount(self, parent = QtCore.QModelIndex()):
+        return 3
+
+    def rowCount(self, parent = QtCore.QModelIndex()):
+        if parent.column() > 0:
+            return 0
+
+        if not parent.isValid():
+            parentItem = self.rootItem
+        else:
+            parentItem = parent.internalPointer()
+        
+        if parentItem.isFile() or parentItem.isDir():
+            return 0
+        else:
+            return len(parentItem.childItemBookmarks())
+
+    def index(self, row, column, parent = QtCore.QModelIndex()):
+        if row < 0 or column < 0 or row >= self.rowCount(parent) or column >= self.columnCount(parent):
+            return QtCore.QModelIndex()
+
+        if not parent.isValid():
+            parentItem = self.rootItem
+        else:
+            parentItem = parent.internalPointer()
+        
+        return self.createIndex(row, column, parentItem.childItemBookmarks()[row])
+
+    def parent(self, child):
+        if not child.isValid():
+            return QtCore.QModelIndex()
+        
+        childItem = child.internalPointer()
+        parentItem = childItem.parentItemBookmark()
+
+        if parentItem == self.rootItem or parentItem.node() == self.rootItem.node():
+            return QtCore.QModelIndex()
+
+        return self.createIndex(parentItem.rowNumber(), 0, parentItem)
+
+    def headerData(self, section, orientation, role = QtCore.Qt.DisplayRole):
+        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
+            if section == 0:
+                return QtCore.QVariant(self.tr("Name"))
+            elif section == 1:
+                return QtCore.QVariant(self.tr("Path"))
+            elif section == 2:
+                return QtCore.QVariant(self.tr("Comments"))
+            else:
+                return QtCore.QVariant()
+
+        return QtCore.QVariant()
+
+    def data(self, index, role = QtCore.Qt.DisplayRole):
+        if not index.isValid():
+            return QtCore.QVariant()
+        
+        item = index.internalPointer()
+        
+        if role == QtCore.Qt.DisplayRole:
+            if index.column() == 0: 
+                return QtCore.QVariant(item.getName().split("\n").join(" "))
+            elif index.column() == 1:
+                return QtCore.QVariant(item.getPath().split("\n").join(" "))
+            elif index.column() == 2:
+                return QtCore.QVariant(item.getComments().split("\n").join(" "))
+            
+        elif role == QtCore.Qt.ToolTipRole:
+            if item.isFile() or item.isDir():
+                return QtCore.QVariant(item.getPath().split("\n").join(" "))
+            elif item.isFolder():
+                text = QtCore.QString(u'%1 item')
+                return QtCore.QVariant(self.tr(text.arg(len(item.childItemBookmarks()))))
+            
+        elif role == QtCore.Qt.DecorationRole:
+            if index.column() == 0:
+                if item.isFolder():
+                    return QtCore.QVariant(self.iconProvider.icon(QtGui.QFileIconProvider.Trashcan))
+                else:
+                    return QtCore.QVariant(self.iconProvider.icon(QtCore.QFileInfo(item.getPath())))
+
+        return QtCore.QVariant()
+
+    def setData(self, index, value, role = QtCore.Qt.EditRole):
+        if index.isValid() and role == QtCore.Qt.EditRole:
+            item = index.internalPointer()
+            
+            if index.column() == 0:
+                item.setName(value.toString())
+                self.bModified = True
+                return True
+            elif index.column() == 1:
+                item.setPath(value.toString())
+                self.bModified = True
+                return True
+
+        return False
+    
+    def insertRows(self, row, count, parent = QtCore.QModelIndex()):
+        if row < 0 or row > self.rowCount(parent) or count < 1:  # or parent.column() > 0:
+            return False
+        
+        self.beginInsertRows(QtCore.QModelIndex(), row, row + count - 1)
+        self.endInsertRows()
+        
+        return True
+
+    def mimeTypes(self):
+        types = QtCore.QStringList()
+        types << "application/x-bookmarksdatalist" << "text/uri-list"
+        return types
+
+    def mimeData(self, indexes):
+        mimeData = QtCore.QMimeData()
+        encodedData = QtCore.QByteArray()
+        
+        stream = QtCore.QDataStream(encodedData, QtCore.QIODevice.WriteOnly)
+        
+        for index in indexes:
+            if index.isValid():
+                stream << self.data(index)
+
+        mimeData.setData("application/x-bookmarksdatalist", encodedData)
+        return mimeData
+        
+    def dropMimeData(self, data, action, row, column, parent):
+        ok = False
+        
+        if data.hasFormat("application/x-bookmarksdatalist"):
+            encodedData = data.data("application/x-bookmarksdatalist")
+            stream = QtCore.QDataStream(encodedData, QtCore.QIODevice.ReadOnly)
+        
+            while not stream.atEnd():
+                c0 = QtCore.QVariant()
+                c1 = QtCore.QVariant()
+                c2 = QtCore.QVariant()
+                stream >> c0 >> c1 >> c2
+                name, path,  comments = c0.toString(),  c1.toString(),  c2.toString()
+                ok = True
+        
+        elif data.hasFormat("text/uri-list"):
+            urlList = data.urls()
+            if urlList:
+                for url in urlList:
+                    filePath = url.toLocalFile()
+                    if filePath:
+                        fileInfo = QtCore.QFileInfo(filePath)
+                        if fileInfo.isFile() and fileInfo.suffix() == 'xml':
+                            name, path,  comments = fileInfo.fileName(), fileInfo.absoluteFilePath(), u'file'
+                            ok = True
+                        elif fileInfo.isDir():
+                            name, path,  comments = fileInfo.fileName(), fileInfo.absoluteFilePath(), u'dir'
+                            ok = True
+        
+        if ok:
+            self.insertBookmark(row, parent,  self.getNode(name, path, comments))
+            return True
+        
+        return False
+    
+    def supportedDropActions(self):
+        return QtCore.Qt.CopyAction | QtCore.Qt.MoveAction 

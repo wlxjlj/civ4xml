@@ -67,7 +67,7 @@ def readCiv4Registry():
         btsXmlDir = btsDir + GC.Dir_Xml
         
     return (vanillaXmlDir, wlXmlDir, btsXmlDir)
-        
+
 def searchXml(filePath, bFirst = True):
     result = []
     fileInfo = QtCore.QFileInfo(filePath)

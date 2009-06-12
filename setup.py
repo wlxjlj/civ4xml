@@ -8,7 +8,7 @@ import py2exe
 from civ4xml_constants import GC
 
 main = 'civ4xml_GUI.pyw'
-Mydata_files = [('.', ['Civ4XML_default_settings.ini', 'Civ4XML_settings.ini', 'gpl-3.0.txt', 'readme.txt', 'changelog.txt'])]
+Mydata_files = [('.', ['Civ4XML_default_settings.ini', 'Civ4XML_settings.ini', 'bookmarks.xml', 'gpl-3.0.txt', 'readme.txt', 'changelog.txt'])]
 
 version_str = GC.VERSION_civ4xml
 
