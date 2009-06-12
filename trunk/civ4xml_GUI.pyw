@@ -5,6 +5,7 @@
 import sys
 from PyQt4 import QtCore, QtGui, QtXml ##, uic
 
+from civ4xml_constants import GC
 from civ4xml_parser import *
 from civ4xml_promoting_widget import *
 import civ4xml_utilities as gu
@@ -297,11 +298,17 @@ class Civ4Window(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self, parent)
         
         self.setupUi()
+        self.createDockWidget()
         self.createMenu()
+        #self.createToolBar()
         
-        self.connect(self.tabBar, QtCore.SIGNAL("doubleClicked(const int&)"), self.closeFile)
+        self.connect(self.tabWidget, QtCore.SIGNAL("openFileFromTabWidgetDropEvent(const QString &)"), self.openFile)
+        self.connect(self.tabWidget.tabBar(), QtCore.SIGNAL("doubleClicked(const int&)"), self.closeFile)
         
-        self.setAcceptDrops(True) 
+        self.connect(self.dirTreeView, QtCore.SIGNAL("openFileFromDirTreeView(const QString &)"), self.openFile)
+        self.connect(self.dirTreeView, QtCore.SIGNAL("loadFileFromDirTreeView(const QString &)"), self.loadFile)
+        self.connect(self.bookmarksTreeView, QtCore.SIGNAL("openFileFromBookmarksTreeView(const QString &, bool)"), self.openFile)
+        self.connect(self.bookmarksTreeView, QtCore.SIGNAL("loadFileFromBookmarksTreeView(const QString &)"), self.loadFile)
         
         self.init()
 
@@ -314,7 +321,7 @@ class Civ4Window(QtGui.QMainWindow):
         self.verticalLayout = QtGui.QVBoxLayout(self.centralwidget)
         
         ## tabwidget
-        self.tabWidget = QtGui.QTabWidget(self.centralwidget)
+        self.tabWidget = Civ4XmlTabWidget(self.centralwidget)
         self.verticalLayout.addWidget(self.tabWidget)
         
         self.tab = QtGui.QWidget(self)
@@ -327,22 +334,20 @@ class Civ4Window(QtGui.QMainWindow):
         
         self.menuFile = QtGui.QMenu(self.menubar)
         self.menuView = QtGui.QMenu(self.menubar)
+        self.menuWindow = QtGui.QMenu(self.menubar)
         self.menuSettings = QtGui.QMenu(self.menubar)
         self.menuHelp = QtGui.QMenu(self.menubar)
         self.setMenuBar(self.menubar)
 
         self.menubar.addAction(self.menuFile.menuAction())
         self.menubar.addAction(self.menuView.menuAction())
+        self.menubar.addAction(self.menuWindow.menuAction())
         self.menubar.addAction(self.menuSettings.menuAction())
         self.menubar.addAction(self.menuHelp.menuAction())
 
         ## statusbar
         self.statusbar = QtGui.QStatusBar(self)
         self.setStatusBar(self.statusbar)
-        
-        ## tabbar, not in ui
-        self.tabBar = Civ4TabBar(self.tabWidget)
-        self.tabWidget.setTabBar(self.tabBar)
     
         self.retranslateUi()
         #QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -352,8 +357,28 @@ class Civ4Window(QtGui.QMainWindow):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QtGui.QApplication.translate("Civ4Window", "new", None, QtGui.QApplication.UnicodeUTF8))
         self.menuFile.setTitle(QtGui.QApplication.translate("Civ4Window", "&File", None, QtGui.QApplication.UnicodeUTF8))
         self.menuView.setTitle(QtGui.QApplication.translate("Civ4Window", "&View", None, QtGui.QApplication.UnicodeUTF8))
+        self.menuWindow.setTitle(QtGui.QApplication.translate("Civ4Window", "&Window", None, QtGui.QApplication.UnicodeUTF8))
         self.menuSettings.setTitle(QtGui.QApplication.translate("Civ4Window", "&Settings", None, QtGui.QApplication.UnicodeUTF8))
         self.menuHelp.setTitle(QtGui.QApplication.translate("Civ4Window", "&Help", None, QtGui.QApplication.UnicodeUTF8))
+
+    def createDockWidget(self):
+        self.dockWidgetDir = QtGui.QDockWidget(self.tr("Directory Window"), self)
+        self.dockWidgetDir.setObjectName(u'dockWidgetDir')
+        self.dockWidgetDir.setAllowedAreas(QtCore.Qt.AllDockWidgetAreas)
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockWidgetDir) 
+        
+        self.dirTreeView = Civ4DirTreeView(self)
+        self.dockWidgetDir.setWidget(self.dirTreeView) 
+        root = self.dirTreeView.model().index(GC.INI_path_dirTreeView_root)
+        self.dirTreeView.setRootIndex(root)
+        
+        self.dockWidgetBookmarks = QtGui.QDockWidget(self.tr("Bookmarks Window"), self)
+        self.dockWidgetBookmarks.setObjectName(u'dockWidgetBookmarks')
+        self.dockWidgetDir.setAllowedAreas(QtCore.Qt.AllDockWidgetAreas)
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.dockWidgetBookmarks) 
+        
+        self.bookmarksTreeView = Civ4BookmarksTreeView(self)
+        self.dockWidgetBookmarks.setWidget(self.bookmarksTreeView)
 
     def createMenu(self):
         ## File
@@ -379,23 +404,38 @@ class Civ4Window(QtGui.QMainWindow):
         self.menuOpenRecentFiles.setEnabled(False)
         
         ## View
+        self.menuView.addSeparator()
+        
         self.menuView.addAction(self.tr("Expand Info TreeView"), self.expandInfoTreeView, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_expand_InfoTreeView)))
         self.menuView.addAction(self.tr("Collapse Info TreeView"), self.collapseInfoTreeView, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_collapse_InfoTreeView)))
         self.menuView.addAction(self.tr("Expand Tag Auto Query TreeView"), self.expandTagQueryTreeView, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_expand_TagQueryTreeView)))
         self.menuView.addAction(self.tr("Collapse Tag Auto Query TreeView"), self.collapseTagQueryTreeView, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_collapse_TagQueryTreeView)))
+        
         self.menuView.addSeparator()
+        
         self.actionLeaderTagFilter = self.menuView.addAction(self.tr("LeaderTag Filter"), self.switchLeaderTagFilter, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_switch_LeaderTagFilter)))
         self.actionInfoFilter = self.menuView.addAction(self.tr("Info Filter"), self.switchInfoFilter, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_switch_InfoFilter)))
         self.actionTagQueryFilter = self.menuView.addAction(self.tr("Tag Query Filter"), self.switchTagQueryFilter, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_switch_TagQueryFilter)))
-        self.menuView.addSeparator()
-        self.actionSwtichTagQuery = self.menuView.addAction(self.tr("Stop Tag Query"), self.swtichTagQuery)
-        self.menuView.addSeparator()
-        self.menuView.addAction(self.tr("View Source"), self.displayXmlSource, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_view_XmlSource)))
         
+        self.menuView.addSeparator()
+        
+        self.actionSwtichTagQuery = self.menuView.addAction(self.tr("Stop Tag Query"), self.swtichTagQuery)
+        
+        self.menuView.addSeparator()
+        
+        self.menuView.addAction(self.tr("View Source"), self.displayXmlSource, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_view_XmlSource)))
+        self.actionFullScreen = self.menuView.addAction(self.tr("Full Screen"), self.setFullScreen, QtGui.QKeySequence(self.tr(GC.INI_shortcutKey_view_FullScreen)))
         
         self.actionSwtichTagQuery.setCheckable(True)
         self.actionSwtichTagQuery.setStatusTip(self.tr("Start/Stop Tag Query"))
+        #self.actionFullScreen.setVisible(False)
         
+        ## Window
+        self.actionToggleDirDockWidget = self.dockWidgetDir.toggleViewAction()
+        self.menuWindow.addAction(self.actionToggleDirDockWidget)
+        self.actionToggleBookmarksDockWidget = self.dockWidgetBookmarks.toggleViewAction()
+        self.menuWindow.addAction(self.actionToggleBookmarksDockWidget)
+
         ## Settings
         self.menuSettings.addAction(self.tr("Save Display Settings"), self.saveSettings)
         self.menuSettings.addSeparator()
@@ -417,8 +457,13 @@ class Civ4Window(QtGui.QMainWindow):
         self.menuHelp.addAction(self.tr("&License"), self.showLicense) 
         self.menuHelp.addSeparator()
         self.menuHelp.addAction(self.tr("About &Civ4 XML View"), self.showAbout) 
-        self.menuHelp.addAction(self.tr("About &Qt"), QtGui.qApp, QtCore.SLOT("aboutQt()")) 
+        self.menuHelp.addAction(self.tr("About &Qt"), QtGui.qApp, QtCore.SLOT("aboutQt()"))
 
+    def createToolBar(self):
+        self.toolBarBookmarks = QtGui.QToolBar(self)
+        self.toolBarBookmarks.setWindowTitle(self.tr("Bookmarks"))
+        self.addToolBar(self.toolBarBookmarks)
+    
     def init(self):
         self.oldTabCount = 0
         self.iCurrentSourceViewWidgetID = 0
@@ -431,6 +476,12 @@ class Civ4Window(QtGui.QMainWindow):
             fileInfo = QtCore.QFileInfo(arg)
             if fileInfo.isFile():
                 self.openFile(arg)
+
+    ## init end
+    
+    def test(self):
+        print 'test'
+        print 'test end'
 
     def currentIdx(self):
         if not self.oldTabCount:
@@ -484,6 +535,9 @@ class Civ4Window(QtGui.QMainWindow):
             
         ## mainWindow
         ok = self.restoreGeometry(GC.g_DICT_settings[GC.INI_display_mainWindow])
+        ok &= self.restoreState(GC.g_DICT_settings[GC.INI_display_mainWindow_dockwidget], GC.VERSION_mainwindow_dockwidget)
+        ok &= self.dirTreeView.header().restoreState(GC.g_DICT_settings[GC.INI_display_dirTreeView])
+        ok &= self.bookmarksTreeView.header().restoreState(GC.g_DICT_settings[GC.INI_display_bookmarksTreeView])
         
         return ok
     
@@ -605,10 +659,6 @@ class Civ4Window(QtGui.QMainWindow):
         
     def informXmlFileError(self, filePath = u'the file'):
         QtGui.QMessageBox.warning(self, self.tr("Xml File Error"), self.tr("This program was unable to read %1.").arg(self.strippedName(filePath)), QtGui.QMessageBox.Ok ) 
-        
-    def test(self):
-        print 'test'
-        print 'test end'
 
     ## virtual protected
     def closeEvent(self, event):
@@ -634,37 +684,40 @@ class Civ4Window(QtGui.QMainWindow):
             widget.close()
         
         self.dictXmlSourceViewWidget.clear()
+        
+        ## bookmarks autosave
+        self.bookmarksTreeView.model().save()
 
         QtGui.QMainWindow.closeEvent(self, event)
 
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasFormat("text/uri-list"):
-            event.accept()
-        else:
-            event.ignore()
-
-    def dropEvent(self, event): 
-        urlList = event.mimeData().urls()
-        
-        if urlList:
-            for url in urlList:
-                fileName = url.toLocalFile()
-                
-                if fileName:
-                    fileInfo = QtCore.QFileInfo(fileName)
-                    
-                    if fileInfo.suffix() == 'xml':
-                        self.openFile(fileName)
-
     ## SLOTs
-    def openFile(self,  filePath = None):
+    def openFile(self,  filePath = None,  bOpenDir = False):
+        bNeedFilePath = False
+        
         if not filePath:
             if self.oldTabCount:
-                dir = self.currentTab().filePath
+                dirPath = self.currentTab().filePath
             else:
-                dir = self.xmlPath
+                dirPath = self.xmlPath
+            bNeedFilePath = True
+            
+        else:
+            fileInfo = QtCore.QFileInfo(filePath)
+            
+            if fileInfo.isDir() and not bOpenDir:
+                dirInfo = QtCore.QDir(filePath)
+                subfileInfoList = dirInfo.entryInfoList(QtCore.QStringList('*.xml'), QtCore.QDir.Files)
+                for subfileInfo in subfileInfoList:
+                    subfilePath = subfileInfo.absoluteFilePath()
+                    self.openFile(subfilePath)
+                return
+                
+            elif not fileInfo.isFile():
+                dirPath = filePath
+                bNeedFilePath = True
 
-            filePath = QtGui.QFileDialog.getOpenFileName(self, QtCore.QString(), dir, self.tr("XML files (*.xml);;All files (*.*)"))
+        if bNeedFilePath:
+            filePath = QtGui.QFileDialog.getOpenFileName(self, QtCore.QString(), dirPath, self.tr("XML files (*.xml);;All files (*.*)"))
 
         if filePath:
             newTab = Civ4XmlWidget(self, filePath)
@@ -689,7 +742,7 @@ class Civ4Window(QtGui.QMainWindow):
             self.processTabPageSettings(not self.actionUserSetting.isChecked())
             self.addRecentFile(filePath)
             self.xmlPath = filePath
-            
+
     def loadFile(self, filePath = None):
         if self.oldTabCount: 
             currentTab = self.currentTab()
@@ -728,6 +781,9 @@ class Civ4Window(QtGui.QMainWindow):
                 newTabIdx = self.tabWidget.insertTab(self.oldTabCount, newTab, self.strippedName(filePath))
                 newTab.show()
                 self.tabWidget.setCurrentIndex(newTabIdx)
+                
+                self.oldTabCount = 1
+                self.processTabPageSettings(not self.actionUserSetting.isChecked())
             
             else:
                 currentTab = self.currentTab()
@@ -735,11 +791,11 @@ class Civ4Window(QtGui.QMainWindow):
                     return GC.XML_load_error
                     
                 currentTabIdx = self.tabWidget.currentIndex()
-                self.tabWidget.setTabText(currentTabIdx, filePath)
+                self.tabWidget.setTabText(currentTabIdx, self.strippedName(filePath))
             
             self.addRecentFile(filePath)
             self.xmlPath = filePath
-            
+
     def closeFile(self, index = -1):
         if self.oldTabCount:            
             if index == -1:
@@ -796,6 +852,8 @@ class Civ4Window(QtGui.QMainWindow):
                     return
                 
                 out = QtCore.QTextStream(saveFile)
+                #out.setCodec('utf-8')
+                #document.save(out, 4, QtXml.QDomNode.EncodingFromTextStream)
                 document.save(out, 4)
                 out.flush()
                 saveFile.close()
@@ -825,7 +883,7 @@ class Civ4Window(QtGui.QMainWindow):
             self.actionListOpenRecentFiles[i].setVisible(False)
         
         self.menuOpenRecentFiles.setEnabled(False)
-        
+
     def expandInfoTreeView(self):
         if self.oldTabCount:
             currentTabIdx = self.tabWidget.currentIndex()
@@ -837,13 +895,13 @@ class Civ4Window(QtGui.QMainWindow):
             currentTabIdx = self.tabWidget.currentIndex()
             currentTab = self.tabWidget.widget(currentTabIdx)
             currentTab.infoTreeView.collapseAll()
-            
+
     def expandTagQueryTreeView(self):
         if self.oldTabCount:
             currentTabIdx = self.tabWidget.currentIndex()
             currentTab = self.tabWidget.widget(currentTabIdx)
             currentTab.tagQueryTreeView.expandAll()
-        
+
     def collapseTagQueryTreeView(self):
         if self.oldTabCount:
             currentTabIdx = self.tabWidget.currentIndex()
@@ -857,7 +915,7 @@ class Civ4Window(QtGui.QMainWindow):
                 filter.show()
             else:
                 filter.hide()
-            
+
     def switchInfoFilter(self):
         if self.oldTabCount:
             filter = self.currentTab().infoFilter
@@ -941,6 +999,9 @@ class Civ4Window(QtGui.QMainWindow):
         
         #### mainWindow
         GC.g_settings.setValue(GC.INI_display_mainWindow, QtCore.QVariant(self.saveGeometry()))
+        GC.g_settings.setValue(GC.INI_display_mainWindow_dockwidget, QtCore.QVariant(self.saveState(GC.VERSION_mainwindow_dockwidget)))
+        GC.g_settings.setValue(GC.INI_display_dirTreeView, QtCore.QVariant(self.dirTreeView.header().saveState()))
+        GC.g_settings.setValue(GC.INI_display_bookmarksTreeView, QtCore.QVariant(self.bookmarksTreeView.header().saveState()))
         
         if self.oldTabCount:
             ## splitter, header
@@ -983,11 +1044,11 @@ class Civ4Window(QtGui.QMainWindow):
             widget.raise_()
             
         else:
-            readmeFileInfo = QtCore.QFileInfo(GC.g_appDir, GC.HELP_FileName)
-            f = QtCore.QFile(readmeFileInfo.absoluteFilePath())
+            f = QtCore.QFile(GC.g_readmeFileInfo.absoluteFilePath())
         
             if f.open(QtCore.QIODevice.ReadOnly | QtCore.QIODevice.Text):
-                stream = QtCore.QTextStream(f) 
+                stream = QtCore.QTextStream(f)
+                stream.setCodec('utf-8')
                 text = stream.readAll()
                 f.close()
                 
@@ -1008,6 +1069,8 @@ class Civ4Window(QtGui.QMainWindow):
         m.setup(m.getLicense)
         m.exec_()
 
+    def setFullScreen(self):
+        self.setWindowState(self.windowState() ^ QtCore.Qt.WindowFullScreen)
 
 def initGlobals(app, argv):
     GC.g_XmlDir_Vanilla, GC.g_XmlDir_Wl, GC.g_XmlDir_BtS = gu.readCiv4Registry()
@@ -1017,8 +1080,11 @@ def initGlobals(app, argv):
     GC.g_appDirName = GC.g_appInfo.absolutePath()
     GC.g_appName = GC.g_appInfo.fileName()
     
-    QtCore.QSettings.setUserIniPath(GC.g_appDirName)
     GC.g_iniFileInfo = QtCore.QFileInfo(GC.g_appDir, GC.INI_FileName)
+    GC.g_readmeFileInfo = QtCore.QFileInfo(GC.g_appDir, GC.FileName_readme)
+    GC.g_bookmarksFileInfo = QtCore.QFileInfo(GC.g_appDir, GC.FileName_bookmarks)
+    
+    QtCore.QSettings.setUserIniPath(GC.g_appDirName)
     
     initSettings()
 
@@ -1043,12 +1109,18 @@ def loadGlobalSettings():
     ## path
     GC.g_settings.beginGroup(GC.INI_GROUP_Path)
     
+    #### startup
     dirName = GC.g_settings.value(GC.INI_path_startup_key).toString()
     if dirName:
         GC.g_DICT_settings[GC.INI_path_startup_key] = dirName
     else:
         GC.g_DICT_settings[GC.INI_path_startup_key] = GC.g_appDirName
-        
+    
+    #### dirTreeView
+    dirRoot = GC.g_settings.value(GC.INI_path_dirTreeView_root_key).toString()
+    if dirRoot:
+        GC.INI_path_dirTreeView_root = dirRoot
+    
     GC.g_settings.endGroup()
     
     ## filter
@@ -1093,14 +1165,17 @@ def loadDisplaySettings(g_DICT, settings):
     
     #### mainWindow
     g_DICT[GC.INI_display_mainWindow] = settings.value(GC.INI_display_mainWindow).toByteArray()
+    g_DICT[GC.INI_display_mainWindow_dockwidget] = settings.value(GC.INI_display_mainWindow_dockwidget).toByteArray()
+    g_DICT[GC.INI_display_dirTreeView] = settings.value(GC.INI_display_dirTreeView).toByteArray()
+    g_DICT[GC.INI_display_bookmarksTreeView] = settings.value(GC.INI_display_bookmarksTreeView).toByteArray()
     
     #### splitter, header
     for name in GC.INI_display_TUPLE_CustomWidgetName:
         g_DICT[name] = settings.value(name).toByteArray()
     
     settings.endGroup()
-    
-    
+
+
 def main():
     if GC.VERSION_debug:
         g_D = gu.DebugLog()
