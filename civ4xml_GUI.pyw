@@ -474,7 +474,7 @@ class Civ4Window(QtGui.QMainWindow):
         
         for arg in sys.argv[1:]:
             fileInfo = QtCore.QFileInfo(arg)
-            if fileInfo.isFile():
+            if fileInfo.isFile() or fileInfo.isDir():
                 self.openFile(arg)
 
     ## init end
@@ -731,17 +731,17 @@ class Civ4Window(QtGui.QMainWindow):
                 self.tabWidget.removeTab(0)
                 self.tab.close()
         
-            self.oldTabCount += 1
-            
             self.setupTabSignals(newTab)
             
             newTabIdx = self.tabWidget.insertTab(self.oldTabCount, newTab, self.strippedName(filePath))
             self.tabWidget.setCurrentIndex(newTabIdx)
             newTab.show()
             
+            self.oldTabCount += 1
             self.processTabPageSettings(not self.actionUserSetting.isChecked())
             self.addRecentFile(filePath)
             self.xmlPath = filePath
+            
 
     def loadFile(self, filePath = None):
         if self.oldTabCount: 
@@ -768,22 +768,7 @@ class Civ4Window(QtGui.QMainWindow):
 
         if filePath:
             if not self.oldTabCount:
-                newTab = Civ4XmlWidget(self, filePath)
-                
-                if newTab.bXmlFail:
-                    newTab.close()
-                    self.informXmlFileError(filePath)
-                    return GC.XML_load_error
-                
-                self.tabWidget.removeTab(0)
-                self.tab.close()
-                
-                newTabIdx = self.tabWidget.insertTab(self.oldTabCount, newTab, self.strippedName(filePath))
-                newTab.show()
-                self.tabWidget.setCurrentIndex(newTabIdx)
-                
-                self.oldTabCount = 1
-                self.processTabPageSettings(not self.actionUserSetting.isChecked())
+                self.openFile(filePath)
             
             else:
                 currentTab = self.currentTab()
@@ -793,8 +778,8 @@ class Civ4Window(QtGui.QMainWindow):
                 currentTabIdx = self.tabWidget.currentIndex()
                 self.tabWidget.setTabText(currentTabIdx, self.strippedName(filePath))
             
-            self.addRecentFile(filePath)
-            self.xmlPath = filePath
+                self.addRecentFile(filePath)
+                self.xmlPath = filePath
 
     def closeFile(self, index = -1):
         if self.oldTabCount:            
