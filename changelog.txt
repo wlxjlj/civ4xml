@@ -1,3 +1,7 @@
+Version 0.1.2 (6/14/2009)
+- added readme, the simplest edition
+- fixed a bug with first tab created by load-file action
+
 Version 0.1.2alpha (6/12/2009)
 - added ini/key dirRoot, represents the root of directory window's dir model
 - added file/bookmarks.xml
